@@ -58,9 +58,7 @@ def stream(file_id):
             mimetype='audio/flac',
             headers={
                 'Accept-Ranges': 'bytes',
-                'Cache-Control': 'no-cache',
-                'Access-Control-Allow-Origin': 'https://thepathakarpit.github.io',
-                'Content-Type': 'audio/flac'
+                'Cache-Control': 'no-cache'
             }
         )
     except Exception as e:
