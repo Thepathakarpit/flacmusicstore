@@ -146,11 +146,36 @@ async function handleSearch() {
     }
 }
 
-function downloadTrack(fileId) {
+async function downloadTrack(fileId) {
     try {
         console.log('Downloading track:', fileId);
         const downloadUrl = `${API_URL}/api/download/${fileId}`;
-        window.open(downloadUrl, '_blank');
+        
+        // Fetch the file
+        const response = await fetch(downloadUrl);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        // Get the blob
+        const blob = await response.blob();
+        
+        // Create a URL for the blob
+        const url = window.URL.createObjectURL(blob);
+        
+        // Create a temporary link element
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${fileId}.flac`; // Set the download filename
+        
+        // Append to the document, click it, and remove it
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Clean up the URL
+        window.URL.revokeObjectURL(url);
+        
     } catch (error) {
         console.error('Error downloading track:', error);
         alert('Error downloading track. Please try again.');
