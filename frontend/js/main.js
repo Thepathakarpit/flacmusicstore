@@ -2,49 +2,61 @@ const API_URL = 'https://flacmusicstore-production.up.railway.app';
 let audioPlayer;
 let isPlaying = false;
 
-async function searchTracks() {
-    const searchInput = document.getElementById('searchInput').value;
-    const resultsDiv = document.getElementById('results');
-    
+async function searchTracks(query) {
     try {
-        resultsDiv.innerHTML = '<p class="loading">Searching...</p>';
+        if (!query || query.trim() === '') {
+            console.log('Empty search query');
+            return [];
+        }
         
-        const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(searchInput)}`);
+        const searchUrl = `${API_URL}/api/search?q=${encodeURIComponent(query)}`;
+        console.log('Searching:', searchUrl);
+        
+        const response = await fetch(searchUrl);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
         
-        if (data.error) {
-            throw new Error(data.error);
-        }
+        console.log('Received data:', data);
         
-        resultsDiv.innerHTML = '';
-        if (data.length === 0) {
-            resultsDiv.innerHTML = '<p class="no-results">No tracks found</p>';
-            return;
+        if (data.success) {
+            displayResults(data.results);
+            return data.results;
+        } else {
+            console.error('Search failed:', data.error);
+            return [];
         }
-        
-        data.forEach(track => {
-            const trackElement = document.createElement('div');
-            trackElement.className = 'track-item';
-            trackElement.innerHTML = `
-                <h3>${track.title}</h3>
-                <div class="track-buttons">
-                    <button class="play-button" onclick="playTrack('${track.file_id}', '${track.title}')">
-                        <i class="fas fa-play"></i> Play
-                    </button>
-                    <button class="download-button" onclick="window.location.href='${API_BASE_URL}/download/${track.file_id}'">
-                        <i class="fas fa-download"></i> Download
-                    </button>
-                </div>
-            `;
-            resultsDiv.appendChild(trackElement);
-        });
     } catch (error) {
         console.error('Error searching tracks:', error);
-        resultsDiv.innerHTML = `<p class="error">${error.message}</p>`;
+        return [];
     }
+}
+
+function displayResults(results) {
+    const resultsContainer = document.getElementById('results');
+    resultsContainer.innerHTML = ''; // Clear previous results
+
+    console.log('Displaying results:', results);
+
+    if (!results || results.length === 0) {
+        resultsContainer.innerHTML = '<p>No results found</p>';
+        return;
+    }
+
+    results.forEach(track => {
+        const trackElement = document.createElement('div');
+        trackElement.className = 'track-item';
+        trackElement.innerHTML = `
+            <h3>${track.title}</h3>
+            <p>${track.artist} - ${track.album}</p>
+            <div class="track-buttons">
+                <button class="play-button" onclick="playTrack('${track.file_id}', '${track.title}')">Play</button>
+                <button class="download-button" onclick="downloadTrack('${track.file_id}')">Download</button>
+            </div>
+        `;
+        resultsContainer.appendChild(trackElement);
+    });
 }
 
 async function playTrack(fileId, title) {
@@ -58,9 +70,8 @@ async function playTrack(fileId, title) {
         playerContainer.classList.remove('hidden');
         nowPlaying.textContent = title;
         
-        // Set audio source with cache-busting parameter
         const timestamp = new Date().getTime();
-        audioPlayer.src = `${API_BASE_URL}/stream/${fileId}?t=${timestamp}`;
+        audioPlayer.src = `${API_URL}/stream/${fileId}?t=${timestamp}`;
         
         audioPlayer.addEventListener('loadedmetadata', () => {
             seekSlider.max = Math.floor(audioPlayer.duration);
@@ -71,7 +82,6 @@ async function playTrack(fileId, title) {
             seekSlider.value = Math.floor(audioPlayer.currentTime);
             document.getElementById('current-time').textContent = formatTime(audioPlayer.currentTime);
             
-            // Update play/pause button
             playPauseBtn.innerHTML = audioPlayer.paused ? 
                 '<i class="fas fa-play"></i>' : 
                 '<i class="fas fa-pause"></i>';
@@ -119,4 +129,20 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         togglePlay();
     }
-}); 
+});
+
+async function handleSearch() {
+    try {
+        const searchInput = document.getElementById('search-input');
+        const query = searchInput.value;
+        
+        // Show loading state
+        const results = await searchTracks(query);
+        
+        // Display results
+        displayResults(results);
+    } catch (error) {
+        console.error('Search failed:', error);
+        // Show error to user
+    }
+} 
