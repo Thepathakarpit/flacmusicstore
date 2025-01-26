@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FLAC Music Store</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script type="text/javascript">
+      (function(l) {
+        if (l.search[1] === '/' ) {
+          var decoded = l.search.slice(1).split('&').map(function(s) { 
+            return s.replace(/~and~/g, '&')
+          }).join('?');
+          window.history.replaceState(null, null,
+              l.pathname.slice(0, -1) + decoded + l.hash
+          );
+        }
+      }(window.location))
+    </script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>FLAC Music Store</h1>
+            <div class="search-container">
+                <input type="text" id="searchInput" placeholder="Search for music...">
+                <button onclick="searchTracks()">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+        </header>
+        
+        <main id="results">
+            <!-- Search results will be populated here -->
+        </main>
+        
+        <div id="player-container" class="hidden">
+            <div class="player-content">
+                <div class="player-info">
+                    <h2 id="now-playing"></h2>
+                    <div class="time-display">
+                        <span id="current-time">0:00</span> / <span id="duration">0:00</span>
+                    </div>
+                </div>
+                <div class="player-controls">
+                    <audio id="audio-player" preload="auto"></audio>
+                    <input type="range" id="seek-slider" value="0">
+                    <div class="control-buttons">
+                        <button id="play-pause" onclick="togglePlay()">
+                            <i class="fas fa-play"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="js/main.js"></script>
+</body>
+</html> 
