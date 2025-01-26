@@ -45,21 +45,42 @@ def search():
 def download(file_id):
     try:
         file_path = download_file(file_id)
-        return send_file(file_path, as_attachment=True)
+        return send_file(
+            file_path, 
+            as_attachment=True,
+            mimetype='audio/flac',
+            download_name=f"{file_id}.flac"
+        )
     except Exception as e:
+        print(f"[Error] Download failed: {str(e)}")
         return jsonify({'error': str(e)}), 400
 
 @app.route('/api/stream/<file_id>')
 def stream(file_id):
     try:
         file_data = stream_file(file_id)
+        
+        # Add proper CORS and content headers
+        headers = {
+            'Accept-Ranges': 'bytes',
+            'Cache-Control': 'no-cache',
+            'Access-Control-Allow-Origin': 'https://thepathakarpit.github.io',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Range',
+            'Content-Type': 'audio/flac'  # Explicitly set content type
+        }
+
+        # Handle range requests for seeking
+        range_header = request.headers.get('Range')
+        if range_header:
+            headers['Accept-Ranges'] = 'bytes'
+            # Add range handling logic here if needed
+
         return Response(
             file_data,
             mimetype='audio/flac',
-            headers={
-                'Accept-Ranges': 'bytes',
-                'Cache-Control': 'no-cache'
-            }
+            headers=headers,
+            status=200
         )
     except Exception as e:
         print(f"[Error] Streaming failed: {str(e)}")
@@ -78,6 +99,17 @@ def test():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# Add OPTIONS handler for CORS preflight requests
+@app.route('/api/stream/<file_id>', methods=['OPTIONS'])
+def stream_options(file_id):
+    headers = {
+        'Access-Control-Allow-Origin': 'https://thepathakarpit.github.io',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Range',
+        'Access-Control-Max-Age': '3600'
+    }
+    return ('', 204, headers)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0') 
