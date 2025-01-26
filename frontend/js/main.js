@@ -1,4 +1,4 @@
-const API_URL = 'flacmusicstore-production.up.railway.app';
+const API_URL = 'https://flacmusicstore-production.up.railway.app';
 let audioPlayer;
 let isPlaying = false;
 
