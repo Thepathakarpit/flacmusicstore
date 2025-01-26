@@ -5,8 +5,11 @@ import os
 from utils.drive_helper import download_file, stream_file
 from utils.csv_helper import search_tracks
 
-app = Flask(__name__)
-CORS(app, "origins": "*")  # Replace with your GitHub Pages domain
+CORS(app, resources={
+    r"/api/*": {
+        "origins": "*"
+    }
+})  # Replace with your GitHub Pages domain
 
 @app.route('/api/search', methods=['GET'])
 def search():
