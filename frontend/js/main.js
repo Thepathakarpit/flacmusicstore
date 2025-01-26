@@ -37,6 +37,8 @@ function displayResults(results) {
     const resultsContainer = document.getElementById('results');
     resultsContainer.innerHTML = ''; // Clear previous results
 
+    console.log('Displaying results:', results);
+
     if (!results || results.length === 0) {
         resultsContainer.innerHTML = '<p>No results found</p>';
         return;
