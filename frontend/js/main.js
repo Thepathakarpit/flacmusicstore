@@ -1,49 +1,18 @@
-const API_BASE_URL = 'flacmusicstore-production.up.railway.app/api';
+const API_URL = 'flacmusicstore-production.up.railway.app';
 let audioPlayer;
 let isPlaying = false;
 
-async function searchTracks() {
-    const searchInput = document.getElementById('searchInput').value;
-    const resultsDiv = document.getElementById('results');
-    
+async function searchTracks(query) {
     try {
-        resultsDiv.innerHTML = '<p class="loading">Searching...</p>';
-        
-        const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(searchInput)}`);
+        const response = await fetch(`${API_URL}/api/search?q=${encodeURIComponent(query)}`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        
-        resultsDiv.innerHTML = '';
-        if (data.length === 0) {
-            resultsDiv.innerHTML = '<p class="no-results">No tracks found</p>';
-            return;
-        }
-        
-        data.forEach(track => {
-            const trackElement = document.createElement('div');
-            trackElement.className = 'track-item';
-            trackElement.innerHTML = `
-                <h3>${track.title}</h3>
-                <div class="track-buttons">
-                    <button class="play-button" onclick="playTrack('${track.file_id}', '${track.title}')">
-                        <i class="fas fa-play"></i> Play
-                    </button>
-                    <button class="download-button" onclick="window.location.href='${API_BASE_URL}/download/${track.file_id}'">
-                        <i class="fas fa-download"></i> Download
-                    </button>
-                </div>
-            `;
-            resultsDiv.appendChild(trackElement);
-        });
+        return data;
     } catch (error) {
         console.error('Error searching tracks:', error);
-        resultsDiv.innerHTML = `<p class="error">${error.message}</p>`;
+        throw error;
     }
 }
 
@@ -60,7 +29,7 @@ async function playTrack(fileId, title) {
         
         // Set audio source with cache-busting parameter
         const timestamp = new Date().getTime();
-        audioPlayer.src = `${API_BASE_URL}/stream/${fileId}?t=${timestamp}`;
+        audioPlayer.src = `${API_URL}/stream/${fileId}?t=${timestamp}`;
         
         audioPlayer.addEventListener('loadedmetadata', () => {
             seekSlider.max = Math.floor(audioPlayer.duration);
