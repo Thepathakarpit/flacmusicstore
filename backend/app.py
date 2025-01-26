@@ -11,6 +11,7 @@ CORS(app, resources={
     r"/api/*": {
         "origins": [
             "https://thepathakarpit.github.io",
+            "https://thepathakarpit.github.io/frontend",
             "http://localhost:8000"  # For local development
         ]
     }
