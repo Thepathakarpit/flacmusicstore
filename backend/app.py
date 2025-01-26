@@ -6,8 +6,14 @@ from utils.drive_helper import download_file, stream_file
 from utils.csv_helper import search_tracks
 
 app = Flask(__name__)
-CORS(app, origins=['https://thepathakarpit.github.io/flacmusicstore/'])  # Replace with your GitHub Pages domain
-
+CORS(app, resources={
+    r"/api/*": {
+        "origins": [
+            "https://thepathakarpit.github.io",
+            "http://localhost:8000"  
+        ]
+    }
+})
 @app.route('/api/search', methods=['GET'])
 def search():
     try:
