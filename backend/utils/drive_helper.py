@@ -1,4 +1,5 @@
 from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import Flow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
@@ -18,7 +19,26 @@ def get_credentials():
             raise Exception("GOOGLE_DRIVE_CREDENTIALS environment variable not set")
             
         creds_data = json.loads(creds_json)
-        creds = Credentials.from_authorized_user_info(creds_data, SCOPES)
+        
+        # Create a Flow instance with web client credentials
+        flow = Flow.from_client_config(
+            creds_data,
+            scopes=SCOPES,
+            redirect_uri=creds_data['web']['redirect_uris'][0]
+        )
+        
+        # Get the authorization URL
+        auth_url, _ = flow.authorization_url(prompt='consent')
+        
+        # Use the client credentials to create a credentials object
+        creds = Credentials(
+            None,  # No token yet
+            refresh_token=None,  # No refresh token yet
+            token_uri=flow.client_config['web']['token_uri'],
+            client_id=flow.client_config['web']['client_id'],
+            client_secret=flow.client_config['web']['client_secret'],
+            scopes=SCOPES
+        )
         
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
@@ -88,5 +108,5 @@ def download_file(file_id):
         return file_path
         
     except Exception as e:
-        print(f"Error downloading file: {str(e)}")
-        raise 
+        print(f"Error downloading file: {str(e)}")  # Debug print
+        raise Exception(f"Error downloading file: {str(e)}" 
