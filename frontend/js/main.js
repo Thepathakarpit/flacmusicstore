@@ -4,13 +4,11 @@ let isPlaying = false;
 
 async function searchTracks(query) {
     try {
-        // Add validation for empty query
         if (!query || query.trim() === '') {
             console.log('Empty search query');
             return [];
         }
         
-        // Log the actual URL being called (for debugging)
         const searchUrl = `${API_URL}/api/search?q=${encodeURIComponent(query)}`;
         console.log('Searching:', searchUrl);
         
@@ -19,11 +17,43 @@ async function searchTracks(query) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        return data;
+        
+        console.log('Received data:', data);
+        
+        if (data.success) {
+            return data.results;
+        } else {
+            console.error('Search failed:', data.error);
+            return [];
+        }
     } catch (error) {
         console.error('Error searching tracks:', error);
-        throw error;
+        return [];
     }
+}
+
+function displayResults(results) {
+    const resultsContainer = document.getElementById('results');
+    resultsContainer.innerHTML = ''; // Clear previous results
+
+    if (!results || results.length === 0) {
+        resultsContainer.innerHTML = '<p>No results found</p>';
+        return;
+    }
+
+    results.forEach(track => {
+        const trackElement = document.createElement('div');
+        trackElement.className = 'track-item';
+        trackElement.innerHTML = `
+            <h3>${track.title}</h3>
+            <p>${track.artist} - ${track.album}</p>
+            <div class="track-buttons">
+                <button class="play-button" onclick="playTrack('${track.file_id}', '${track.title}')">Play</button>
+                <button class="download-button" onclick="downloadTrack('${track.file_id}')">Download</button>
+            </div>
+        `;
+        resultsContainer.appendChild(trackElement);
+    });
 }
 
 async function playTrack(fileId, title) {
@@ -37,7 +67,6 @@ async function playTrack(fileId, title) {
         playerContainer.classList.remove('hidden');
         nowPlaying.textContent = title;
         
-        // Set audio source with cache-busting parameter
         const timestamp = new Date().getTime();
         audioPlayer.src = `${API_URL}/stream/${fileId}?t=${timestamp}`;
         
@@ -50,7 +79,6 @@ async function playTrack(fileId, title) {
             seekSlider.value = Math.floor(audioPlayer.currentTime);
             document.getElementById('current-time').textContent = formatTime(audioPlayer.currentTime);
             
-            // Update play/pause button
             playPauseBtn.innerHTML = audioPlayer.paused ? 
                 '<i class="fas fa-play"></i>' : 
                 '<i class="fas fa-pause"></i>';
