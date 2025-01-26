@@ -51,33 +51,54 @@ def get_drive_service():
         raise Exception(f"Failed to initialize Google Drive service: {str(e)}")
 
 def stream_file(file_id):
-    service = get_drive_service()
+    print("\n=== Starting file stream process ===")
     try:
-        print(f"Attempting to stream file: {file_id}")
+        print("Getting drive service...")
+        service = get_drive_service()
+        print("Drive service obtained successfully")
+        
+        print(f"Requesting metadata for file: {file_id}")
         # Get file metadata first
         file_metadata = service.files().get(fileId=file_id, fields='id,name,mimeType').execute()
-        print(f"File metadata retrieved: {file_metadata}")
+        print(f"File metadata retrieved successfully: {file_metadata}")
         
+        print("Initiating media download request...")
         # Get the file content
         request = service.files().get_media(fileId=file_id)
         fh = io.BytesIO()
         downloader = MediaIoBaseDownload(fh, request)
+        print("Download request initialized")
         
+        print("Starting chunk download...")
         done = False
+        chunk_count = 0
         while not done:
+            chunk_count += 1
+            print(f"Downloading chunk {chunk_count}...")
             status, done = downloader.next_chunk()
             if status:
-                print(f"Download {int(status.progress() * 100)}%")
+                print(f"Download progress: {int(status.progress() * 100)}%")
         
+        print("Download completed, resetting buffer position")
         # Reset buffer position
         fh.seek(0)
         
-        print("File successfully streamed")
-        # Return the file data
-        return fh.read()
+        # Get the size of downloaded data
+        data = fh.read()
+        print(f"File size: {len(data)} bytes")
+        
+        if len(data) == 0:
+            raise Exception("Downloaded file is empty")
+            
+        print("=== File stream process completed successfully ===\n")
+        return data
+        
     except Exception as e:
-        print(f"Error streaming file: {str(e)}")
+        print("\n=== Error in stream_file ===")
         print(f"Error type: {type(e)}")
+        print(f"Error message: {str(e)}")
+        print(f"Error location: {e.__traceback__.tb_frame.f_code.co_name}")
+        print("=== End of error details ===\n")
         raise Exception(f"Error streaming file: {str(e)}")
 
 def download_file(file_id):
