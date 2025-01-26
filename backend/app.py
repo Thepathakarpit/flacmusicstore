@@ -6,7 +6,8 @@ from utils.csv_helper import search_tracks
 from config import TRACKS_CSV_PATH, ensure_data_directories
 
 app = Flask(__name__)
-CORS(app)  # Simple CORS setup that allows all origins
+CORS(app, resources={r"/*": {"origins": "https://thepathakarpit.github.io"}})
+ # Simple CORS setup that allows all origins
 
 # Ensure all required directories exist
 ensure_data_directories()
