@@ -26,10 +26,10 @@
         <header>
             <h1>FLAC Music Store</h1>
             <div class="search-container">
-                <input type="text" id="searchInput" placeholder="Search for music...">
-                <button onclick="searchTracks()">
-                    <i class="fas fa-search"></i>
-                </button>
+                <form id="search-form" onsubmit="event.preventDefault(); handleSearch();">
+                    <input type="text" id="search-input" placeholder="Search tracks...">
+                    <button type="submit">Search</button>
+                </form>
             </div>
         </header>
         
@@ -59,5 +59,33 @@
     </div>
     
     <script src="js/main.js"></script>
+    <script>
+    async function handleSearch() {
+        try {
+            const searchInput = document.getElementById('search-input');
+            const query = searchInput.value;
+            
+            // Show loading state
+            const results = await searchTracks(query);
+            
+            // Display results
+            displayResults(results);
+        } catch (error) {
+            console.error('Search failed:', error);
+            // Show error to user
+        }
+    }
+
+    function displayResults(results) {
+        const resultsContainer = document.getElementById('results');
+        if (!results || results.length === 0) {
+            resultsContainer.innerHTML = '<p>No results found</p>';
+            return;
+        }
+        
+        // Display your results here
+        // ...
+    }
+    </script>
 </body>
 </html> 
