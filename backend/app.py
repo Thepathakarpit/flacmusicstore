@@ -20,7 +20,7 @@ def search():
         print(f"Searching for: {query}")  # Debug print
         
         # Get absolute path to tracks.csv
-        csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'tracks.csv')
+        csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tracks.csv')
         print(f"CSV path: {csv_path}")
         
         if not os.path.exists(csv_path):
