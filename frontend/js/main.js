@@ -97,7 +97,7 @@ async function playTrack(fileId, title) {
             playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
         });
         
-        audioPlayer.play();
+        await audioPlayer.play();
     } catch (error) {
         console.error('Error playing track:', error);
         alert('Error playing track. Please try again.');
@@ -145,4 +145,9 @@ async function handleSearch() {
         console.error('Search failed:', error);
         // Show error to user
     }
+}
+
+function downloadTrack(fileId) {
+    const downloadUrl = `${API_URL}/api/download/${fileId}`;
+    window.open(downloadUrl, '_blank');
 } 
