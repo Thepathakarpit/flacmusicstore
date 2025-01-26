@@ -4,7 +4,17 @@ let isPlaying = false;
 
 async function searchTracks(query) {
     try {
-        const response = await fetch(`${API_URL}/api/search?q=${encodeURIComponent(query)}`);
+        // Add validation for empty query
+        if (!query || query.trim() === '') {
+            console.log('Empty search query');
+            return [];
+        }
+        
+        // Log the actual URL being called (for debugging)
+        const searchUrl = `${API_URL}/api/search?q=${encodeURIComponent(query)}`;
+        console.log('Searching:', searchUrl);
+        
+        const response = await fetch(searchUrl);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
