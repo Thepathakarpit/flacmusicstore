@@ -7,7 +7,6 @@ from config import TRACKS_CSV_PATH, ensure_data_directories
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "https://thepathakarpit.github.io"}})
- # Simple CORS setup that allows all origins
 
 # Ensure all required directories exist
 ensure_data_directories()
@@ -59,7 +58,9 @@ def stream(file_id):
             mimetype='audio/flac',
             headers={
                 'Accept-Ranges': 'bytes',
-                'Cache-Control': 'no-cache'
+                'Cache-Control': 'no-cache',
+                'Access-Control-Allow-Origin': 'https://thepathakarpit.github.io',
+                'Content-Type': 'audio/flac'
             }
         )
     except Exception as e:
