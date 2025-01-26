@@ -19,22 +19,23 @@ def get_drive_service():
         if not creds_json:
             raise Exception("Google Drive credentials not found in environment variables")
             
-        creds_data = json.loads(creds_json)
-        flow = InstalledAppFlow.from_client_secrets_info(
-            creds_data,
-            SCOPES,
-            redirect_uri='https://your-railway-url.railway.app/oauth2callback'
-        )
-        creds = flow.run_local_server(port=0)
-        with open('token.json', 'w') as token:
-            token.write(creds.to_json())
+        try:
+            # Try to create credentials directly from the JSON
+            creds_data = json.loads(creds_json)
+            creds = Credentials.from_authorized_user_info(creds_data, SCOPES)
+        except Exception as e:
+            print(f"Error creating credentials: {str(e)}")
+            raise Exception("Failed to initialize Google Drive credentials")
+
     return build('drive', 'v3', credentials=creds)
 
 def stream_file(file_id):
     service = get_drive_service()
     try:
+        print(f"Attempting to stream file: {file_id}")
         # Get file metadata first
         file_metadata = service.files().get(fileId=file_id, fields='id,name,mimeType').execute()
+        print(f"File metadata retrieved: {file_metadata}")
         
         # Get the file content
         request = service.files().get_media(fileId=file_id)
@@ -50,10 +51,12 @@ def stream_file(file_id):
         # Reset buffer position
         fh.seek(0)
         
+        print("File successfully streamed")
         # Return the file data
         return fh.read()
     except Exception as e:
         print(f"Error streaming file: {str(e)}")
+        print(f"Error type: {type(e)}")
         raise Exception(f"Error streaming file: {str(e)}")
 
 def download_file(file_id):
