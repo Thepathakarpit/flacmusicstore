@@ -6,39 +6,28 @@ from utils.drive_helper import download_file, stream_file
 from utils.csv_helper import search_tracks
 
 app = Flask(__name__)
-# Configure CORS to allow requests from your GitHub Pages domain
-CORS(app, resources={
-    r"/api/*": {
-        "origins": "*"
-    }
-})
+CORS(app, origins=['https://yourusername.github.io'])  # Replace with your GitHub Pages domain
 
 @app.route('/api/search', methods=['GET'])
 def search():
     try:
         query = request.args.get('q', '')
         print(f"Searching for: {query}")  # Debug print
+        print(f"Current working directory: {os.getcwd()}")
         
-        # Get absolute path to tracks.csv
-        csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tracks.csv')
-        print(f"CSV path: {csv_path}")
+        csv_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'tracks.csv')
+        print(f"Looking for CSV at: {os.path.abspath(csv_path)}")
         
         if not os.path.exists(csv_path):
-            print(f"Error: tracks.csv not found at {csv_path}")
-            return jsonify({
-                'error': 'Database file not found',
-                'path': csv_path
-            }), 404
+            print("tracks.csv not found!")  # Debug print
+            return jsonify({'error': 'No tracks database found'}), 404
             
         results = search_tracks(query)
-        print(f"Found {len(results)} results")
+        print(f"Found {len(results)} results")  # Debug print
         return jsonify(results)
     except Exception as e:
-        print(f"Search error: {str(e)}")
-        return jsonify({
-            'error': str(e),
-            'type': type(e).__name__
-        }), 500
+        print(f"Search error: {str(e)}")  # Debug print
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/download/<file_id>', methods=['GET'])
 def download(file_id):
@@ -67,14 +56,6 @@ def stream(file_id):
     except Exception as e:
         print(f"Streaming error: {str(e)}")
         return jsonify({'error': str(e)}), 400
-
-# Add a test endpoint to verify the service is running
-@app.route('/api/test', methods=['GET'])
-def test():
-    return jsonify({
-        'status': 'ok',
-        'message': 'API is running'
-    })
 
 if __name__ == '__main__':
     app.run(debug=True) 
