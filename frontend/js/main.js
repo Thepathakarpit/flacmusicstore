@@ -21,6 +21,7 @@ async function searchTracks(query) {
         console.log('Received data:', data);
         
         if (data.success) {
+            displayResults(data.results);
             return data.results;
         } else {
             console.error('Search failed:', data.error);
