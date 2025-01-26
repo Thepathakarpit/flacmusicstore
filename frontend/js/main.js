@@ -1,4 +1,4 @@
-const API_BASE_URL = 'flacmusicstore-production.up.railway.app';
+const API_BASE_URL = 'flacmusicstore-production.up.railway.app/api';
 let audioPlayer;
 let isPlaying = false;
 
