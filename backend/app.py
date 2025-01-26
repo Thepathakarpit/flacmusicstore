@@ -44,12 +44,21 @@ def search():
 @app.route('/api/download/<file_id>', methods=['GET'])
 def download(file_id):
     try:
-        file_path = download_file(file_id)
-        return send_file(
-            file_path, 
-            as_attachment=True,
+        # Add CORS headers for download
+        headers = {
+            'Access-Control-Allow-Origin': 'https://thepathakarpit.github.io',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Content-Type': 'audio/flac',
+            'Content-Disposition': f'attachment; filename="{file_id}.flac"'
+        }
+        
+        file_data = stream_file(file_id)  # Use stream_file instead of download_file
+        
+        return Response(
+            file_data,
             mimetype='audio/flac',
-            download_name=f"{file_id}.flac"
+            headers=headers,
+            direct_passthrough=True
         )
     except Exception as e:
         print(f"[Error] Download failed: {str(e)}")
