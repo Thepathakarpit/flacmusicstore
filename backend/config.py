@@ -6,6 +6,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 TEMP_DIR = os.path.join(BASE_DIR, 'temp_downloads')
 
+# Define TEMP_DOWNLOAD_DIR for compatibility
+TEMP_DOWNLOAD_DIR = TEMP_DIR
+
 # File paths
 TRACKS_CSV_PATH = os.path.join(DATA_DIR, 'tracks.csv')
 
