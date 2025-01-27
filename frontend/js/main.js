@@ -134,7 +134,7 @@ function downloadTrack(fileId) {
     try {
         console.log('Downloading track:', fileId);
         const downloadUrl = `${API_URL}/api/download/${fileId}`;
-        
+        console.log('Download URL:', downloadUrl);
         // Initiate download
         const link = document.createElement('a');
         link.href = downloadUrl;
