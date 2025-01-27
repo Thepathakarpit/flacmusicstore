@@ -134,57 +134,82 @@ def download(file_id):
 def stream(file_id):
     try:
         session = requests.Session()
-        
-        # First request to get the confirmation token
         file_url = f"{BASE_EXPORT_URL}{file_id}"
-        response = session.get(file_url, stream=True)
         
-        # Check if we need to confirm the download
+        # Initial request to handle Google Drive's download page
+        response = session.get(file_url, stream=True)
+        if response.status_code != 200:
+            return jsonify({'error': 'Failed to access file'}), 404
+
+        # Handle Google Drive confirmation token
         token = get_confirm_token(response)
         if token:
             params = {'id': file_id, 'confirm': token}
             response = session.get(BASE_EXPORT_URL, params=params, stream=True)
+            if response.status_code != 200:
+                return jsonify({'error': 'Failed to confirm download'}), 400
 
-        if response.status_code != 200:
-            raise Exception("Failed to fetch file from Google Drive")
-
-        # Get content type from response headers or filename
+        # Determine content type and size
         content_type = response.headers.get('Content-Type', 'audio/flac')
         if 'content-disposition' in response.headers:
             filename = response.headers['content-disposition'].split('filename=')[-1].strip('"')
             content_type = get_content_type(filename)
 
-        # Get file size for Content-Length header
         content_length = response.headers.get('Content-Length')
+        if not content_length:
+            # If content length is not provided, we need to get it
+            response = session.get(file_url, stream=True, headers={'Range': 'bytes=0-1'})
+            content_length = response.headers.get('Content-Range', '').split('/')[-1]
+            if not content_length or content_length == '*':
+                return jsonify({'error': 'Could not determine file size'}), 400
+            # Reset the response for actual streaming
+            response = session.get(file_url, stream=True)
 
-        # Handle range requests
-        range_header = request.headers.get('Range', None)
+        content_length = int(content_length)
+        
+        # Handle range requests (for seeking in audio player)
+        range_header = request.headers.get('Range')
         if range_header:
-            bytes_range = range_header.replace('bytes=', '').split('-')
-            start = int(bytes_range[0])
-            end = int(bytes_range[1]) if bytes_range[1] else None
-            if end:
+            try:
+                bytes_range = range_header.replace('bytes=', '').split('-')
+                start = int(bytes_range[0])
+                end = int(bytes_range[1]) if bytes_range[1] else content_length - 1
+                
+                if start >= content_length:
+                    return Response(status=416)  # Range Not Satisfiable
+                
+                # Adjust end if it exceeds content_length
+                end = min(end, content_length - 1)
                 length = end - start + 1
-            else:
-                length = int(content_length) - start if content_length else None
-            
-            headers = {
-                'Content-Type': content_type,
-                'Accept-Ranges': 'bytes',
-                'Content-Range': f'bytes {start}-{end or int(content_length)-1}/{content_length}',
-                'Content-Length': str(length)
-            }
-            return Response(
-                response.iter_content(chunk_size=8192),
-                206,
-                headers=headers,
-                direct_passthrough=True
-            )
 
+                # Make a new request with the range
+                headers = {'Range': f'bytes={start}-{end}'}
+                response = session.get(file_url, headers=headers, stream=True)
+                
+                if response.status_code == 206:  # Partial Content
+                    headers = {
+                        'Content-Type': content_type,
+                        'Accept-Ranges': 'bytes',
+                        'Content-Range': f'bytes {start}-{end}/{content_length}',
+                        'Content-Length': str(length),
+                        'Cache-Control': 'no-cache'
+                    }
+                    return Response(
+                        response.iter_content(chunk_size=8192),
+                        206,
+                        headers=headers,
+                        direct_passthrough=True
+                    )
+            except (ValueError, IndexError) as e:
+                print(f"Range parsing error: {str(e)}")
+                # If range parsing fails, fall back to full file
+                response = session.get(file_url, stream=True)
+
+        # Return full file if no range request or range parsing failed
         headers = {
             'Content-Type': content_type,
             'Accept-Ranges': 'bytes',
-            'Content-Length': content_length,
+            'Content-Length': str(content_length),
             'Cache-Control': 'no-cache'
         }
 
@@ -194,9 +219,13 @@ def stream(file_id):
             headers=headers,
             direct_passthrough=True
         )
+
+    except requests.RequestException as e:
+        print(f"Streaming error (RequestException): {str(e)}")
+        return jsonify({'error': 'Failed to stream file'}), 500
     except Exception as e:
-        print(f"Streaming error: {str(e)}")
-        return jsonify({'error': str(e)}), 400
+        print(f"Streaming error (General): {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/test', methods=['GET'])
 def test():
