@@ -1,112 +1,116 @@
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 import io
 import os
 import json
+from config import TEMP_DOWNLOAD_DIR
 
-# Scopes for accessing Google Drive API
 SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 
-# Temporary directory for downloaded files
-TEMP_DOWNLOAD_DIR = os.getenv('TEMP_DOWNLOAD_DIR', 'downloads/')
-
 def get_drive_service():
-    """Authenticate and return a Google Drive API service."""
     creds = None
-
-    # Check if token.json exists for saved credentials
     if os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-
-    # If credentials are invalid or not found, initialize OAuth flow
     if not creds or not creds.valid:
-        client_id = os.getenv('GOOGLE_CLIENT_ID')
-        client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
-
-        if not client_id or not client_secret:
-            raise Exception("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set in environment variables.")
-
-        # Prepare OAuth client configuration
-        client_config = {
-            "installed": {
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "redirect_uris": ["urn:ietf:wg:oauth:2.0:oob"]
+        # Get credentials from environment variable
+        creds_json = os.environ.get('GOOGLE_DRIVE_CREDENTIALS')
+        if not creds_json:
+            raise Exception("Google Drive credentials not found in environment variables")
+        
+        try:
+            # Parse the credentials JSON
+            client_secret_data = json.loads(creds_json)
+            
+            # Ensure the proper format Google expects
+            client_config = {
+                "web": {
+                    "client_id": client_secret_data["web"]["client_id"],
+                    "project_id": "flacstore",  # Add a default project_id
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                    "client_secret": client_secret_data["web"]["client_secret"],
+                    "redirect_uris": client_secret_data["web"]["redirect_uris"],
+                    "javascript_origins": ["https://thepathakarpit.github.io"]
+                }
             }
-        }
-
-        # Use InstalledAppFlow to generate the token
-        flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
-        print("Visit the following URL to authorize the application:")
-        print(flow.authorization_url(prompt='consent')[0])
-
-        # Prompt user to input the authorization code manually
-        auth_code = input("Enter the authorization code: ").strip()
-        creds = flow.fetch_token(code=auth_code)
-
-        # Save the credentials for future use
-        with open('token.json', 'w') as token_file:
-            token_file.write(creds.to_json())
-
+            
+            # Create flow with the properly formatted config
+            flow = Flow.from_client_config(
+                client_config=client_config,
+                scopes=SCOPES
+            )
+            
+            # Set the redirect URI to match your GitHub Pages URL
+            flow.redirect_uri = "https://thepathakarpit.github.io/flacmusicstore/"
+            
+            # Run the local server flow
+            creds = flow.run_local_server(port=0)
+            
+            # Save the credentials for future use
+            with open('token.json', 'w') as token:
+                token.write(creds.to_json())
+                
+        except json.JSONDecodeError:
+            raise Exception("Invalid JSON format in GOOGLE_DRIVE_CREDENTIALS")
+        except KeyError as e:
+            raise Exception(f"Missing required field in credentials: {str(e)}")
+            
     return build('drive', 'v3', credentials=creds)
 
 def stream_file(file_id):
-    """Stream a file's content directly from Google Drive."""
     service = get_drive_service()
     try:
-        # Fetch file metadata
+        # Get file metadata first
         file_metadata = service.files().get(fileId=file_id, fields='id,name,mimeType').execute()
-        print(f"Streaming file: {file_metadata['name']} ({file_metadata['mimeType']})")
-
-        # Get the file content as a stream
+        
+        # Get the file content
         request = service.files().get_media(fileId=file_id)
         fh = io.BytesIO()
         downloader = MediaIoBaseDownload(fh, request)
-
+        
         done = False
         while not done:
             status, done = downloader.next_chunk()
             if status:
-                print(f"Streaming progress: {int(status.progress() * 100)}%")
-
-        fh.seek(0)  # Reset the buffer position
+                print(f"Download {int(status.progress() * 100)}%")
+        
+        # Reset buffer position
+        fh.seek(0)
+        
+        # Return the file data
         return fh.read()
     except Exception as e:
         print(f"Error streaming file: {str(e)}")
         raise Exception(f"Error streaming file: {str(e)}")
 
 def download_file(file_id):
-    """Download a file from Google Drive."""
     service = get_drive_service()
+    
     try:
-        # Fetch file metadata
+        # First check if the file exists and is downloadable
         file_metadata = service.files().get(fileId=file_id, fields='id,name,mimeType').execute()
-        print(f"Downloading file: {file_metadata['name']} ({file_metadata['mimeType']})")
-
-        # Ensure it's not a folder
+        print(f"File metadata: {file_metadata}")  # Debug print
+        
         if 'application/vnd.google-apps.folder' in file_metadata.get('mimeType', ''):
-            raise Exception("Cannot download a folder. Please provide a valid file ID.")
-
-        # Prepare the download path
+            raise Exception("Cannot download a folder. Please provide a file ID.")
+        
+        request = service.files().get_media(fileId=file_id)
+        
         file_path = os.path.join(TEMP_DOWNLOAD_DIR, file_metadata['name'])
         if not os.path.exists(TEMP_DOWNLOAD_DIR):
             os.makedirs(TEMP_DOWNLOAD_DIR)
-
-        # Download the file
-        request = service.files().get_media(fileId=file_id)
-        with open(file_path, 'wb') as fh:
-            downloader = MediaIoBaseDownload(fh, request)
-            done = False
-            while not done:
-                status, done = downloader.next_chunk()
-                print(f"Download progress: {int(status.progress() * 100)}%")
-
-        print(f"File downloaded successfully: {file_path}")
+            
+        fh = io.FileIO(file_path, 'wb')
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while done is False:
+            status, done = downloader.next_chunk()
+            print(f"Download {int(status.progress() * 100)}%")
+            
         return file_path
     except Exception as e:
-        print(f"Error downloading file: {str(e)}")
+        print(f"Error downloading file: {str(e)}")  # Debug print
         raise Exception(f"Error downloading file: {str(e)}")
