@@ -119,6 +119,21 @@ function formatTime(seconds) {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
+function toggleMute() {
+    const audioPlayer = document.getElementById('audio-player');
+    const volumeSlider = document.getElementById('volume-slider');
+    
+    if (audioPlayer.volume > 0) {
+        audioPlayer.dataset.lastVolume = audioPlayer.volume;
+        audioPlayer.volume = 0;
+        volumeSlider.value = 0;
+    } else {
+        audioPlayer.volume = audioPlayer.dataset.lastVolume || 1;
+        volumeSlider.value = audioPlayer.volume;
+    }
+    updateVolumeIcon(audioPlayer.volume);
+}
+
 // Update the togglePlay function
 function togglePlay() {
     const audioPlayer = document.getElementById('audio-player');
