@@ -48,9 +48,6 @@ def get_drive_service():
             
             # Run the local server flow
             # Save the credentials for future use
-            with open('token.json', 'w') as token:
-                token.write(creds.to_json())
-                
         except json.JSONDecodeError:
             raise Exception("Invalid JSON format in GOOGLE_DRIVE_CREDENTIALS")
         except KeyError as e:
