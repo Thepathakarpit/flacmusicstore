@@ -1,3 +1,4 @@
+
 from flask import Flask, jsonify, request, send_file, Response
 from flask_cors import CORS
 import pandas as pd
@@ -8,127 +9,17 @@ import mimetypes
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
+
 # Constants
 TEMP_DOWNLOAD_DIR = 'temp_downloads'
 BASE_EXPORT_URL = "https://drive.google.com/uc?export=download&id="
 
-
-
-from flask import Flask, jsonify, request, send_file, Response
-from flask_cors import CORS
-import pandas as pd
-import os
-import requests
-import io
-import mimetypes
-from werkzeug.contrib.cache import SimpleCache
-
-app = Flask(__name__)
-CORS(app)
-cache = SimpleCache()
-
-# Constants
-CHUNK_SIZE = 1024 * 64  # 64KB chunks
-CACHE_TIMEOUT = 3600  # 1 hour cache
-
 def get_confirm_token(response):
+    """Extract confirmation token from Google Drive response"""
     for key, value in response.cookies.items():
         if key.startswith('download_warning'):
             return value
     return None
-
-def get_file_stream(file_id, start_byte=0):
-    cache_key = f'file_stream_{file_id}'
-    file_info = cache.get(cache_key)
-    
-    if not file_info:
-        session = requests.Session()
-        url = f"https://drive.google.com/uc?export=download&id={file_id}"
-        response = session.get(url, stream=True)
-        
-        token = get_confirm_token(response)
-        if token:
-            params = {'id': file_id, 'confirm': token}
-            response = session.get(url, params=params, stream=True)
-            
-        content_type = response.headers.get('Content-Type', 'audio/flac')
-        content_length = response.headers.get('Content-Length')
-        
-        file_info = {
-            'content_type': content_type,
-            'content_length': content_length,
-            'response': response
-        }
-        cache.set(cache_key, file_info, timeout=CACHE_TIMEOUT)
-    
-    return file_info
-
-@app.route('/stream/<file_id>')
-def stream(file_id):
-    try:
-        range_header = request.headers.get('Range', None)
-        file_info = get_file_stream(file_id)
-        
-        content_length = int(file_info['content_length'])
-        content_type = file_info['content_type']
-
-        if range_header:
-            bytes_range = range_header.replace('bytes=', '').split('-')
-            start = int(bytes_range[0])
-            end = int(bytes_range[1]) if bytes_range[1] else min(start + CHUNK_SIZE, content_length - 1)
-            
-            length = end - start + 1
-            
-            headers = {
-                'Content-Type': content_type,
-                'Accept-Ranges': 'bytes',
-                'Content-Range': f'bytes {start}-{end}/{content_length}',
-                'Content-Length': str(length),
-                'Cache-Control': 'public, max-age=3600'
-            }
-            
-            return Response(
-                stream_with_context(generate_chunks(file_info['response'], start, end)),
-                206,
-                headers=headers,
-                direct_passthrough=True
-            )
-        
-        headers = {
-            'Content-Type': content_type,
-            'Accept-Ranges': 'bytes',
-            'Content-Length': str(content_length),
-            'Cache-Control': 'public, max-age=3600'
-        }
-        
-        return Response(
-            stream_with_context(generate_chunks(file_info['response'], 0, content_length)),
-            200,
-            headers=headers,
-            direct_passthrough=True
-        )
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-def generate_chunks(response, start, end):
-    current_byte = 0
-    for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-        if current_byte >= end:
-            break
-        elif current_byte + len(chunk) > start:
-            yield chunk
-        current_byte += len(chunk)
-
-
-
-
-# def get_confirm_token(response):
-#     """Extract confirmation token from Google Drive response"""
-#     for key, value in response.cookies.items():
-#         if key.startswith('download_warning'):
-#             return value
-#     return None
 
 def get_content_type(filename):
     """Get the content type based on file extension"""
@@ -239,73 +130,73 @@ def download(file_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
-# @app.route('/stream/<file_id>')
-# def stream(file_id):
-#     try:
-#         session = requests.Session()
+@app.route('/stream/<file_id>')
+def stream(file_id):
+    try:
+        session = requests.Session()
         
-#         # First request to get the confirmation token
-#         file_url = f"{BASE_EXPORT_URL}{file_id}"
-#         response = session.get(file_url, stream=True)
+        # First request to get the confirmation token
+        file_url = f"{BASE_EXPORT_URL}{file_id}"
+        response = session.get(file_url, stream=True)
         
-#         # Check if we need to confirm the download
-#         token = get_confirm_token(response)
-#         if token:
-#             params = {'id': file_id, 'confirm': token}
-#             response = session.get(BASE_EXPORT_URL, params=params, stream=True)
+        # Check if we need to confirm the download
+        token = get_confirm_token(response)
+        if token:
+            params = {'id': file_id, 'confirm': token}
+            response = session.get(BASE_EXPORT_URL, params=params, stream=True)
 
-#         if response.status_code != 200:
-#             raise Exception("Failed to fetch file from Google Drive")
+        if response.status_code != 200:
+            raise Exception("Failed to fetch file from Google Drive")
 
-#         # Get content type from response headers or filename
-#         content_type = response.headers.get('Content-Type', 'audio/flac')
-#         if 'content-disposition' in response.headers:
-#             filename = response.headers['content-disposition'].split('filename=')[-1].strip('"')
-#             content_type = get_content_type(filename)
+        # Get content type from response headers or filename
+        content_type = response.headers.get('Content-Type', 'audio/flac')
+        if 'content-disposition' in response.headers:
+            filename = response.headers['content-disposition'].split('filename=')[-1].strip('"')
+            content_type = get_content_type(filename)
 
-#         # Get file size for Content-Length header
-#         content_length = response.headers.get('Content-Length')
+        # Get file size for Content-Length header
+        content_length = response.headers.get('Content-Length')
 
-#         # Handle range requests
-#         range_header = request.headers.get('Range', None)
-#         if range_header:
-#             bytes_range = range_header.replace('bytes=', '').split('-')
-#             start = int(bytes_range[0])
-#             end = int(bytes_range[1]) if bytes_range[1] else None
-#             if end:
-#                 length = end - start + 1
-#             else:
-#                 length = int(content_length) - start if content_length else None
+        # Handle range requests
+        range_header = request.headers.get('Range', None)
+        if range_header:
+            bytes_range = range_header.replace('bytes=', '').split('-')
+            start = int(bytes_range[0])
+            end = int(bytes_range[1]) if bytes_range[1] else None
+            if end:
+                length = end - start + 1
+            else:
+                length = int(content_length) - start if content_length else None
             
-#             headers = {
-#                 'Content-Type': content_type,
-#                 'Accept-Ranges': 'bytes',
-#                 'Content-Range': f'bytes {start}-{end or int(content_length)-1}/{content_length}',
-#                 'Content-Length': str(length)
-#             }
-#             return Response(
-#                 response.iter_content(chunk_size=8192),
-#                 206,
-#                 headers=headers,
-#                 direct_passthrough=True
-#             )
+            headers = {
+                'Content-Type': content_type,
+                'Accept-Ranges': 'bytes',
+                'Content-Range': f'bytes {start}-{end or int(content_length)-1}/{content_length}',
+                'Content-Length': str(length)
+            }
+            return Response(
+                response.iter_content(chunk_size=8192),
+                206,
+                headers=headers,
+                direct_passthrough=True
+            )
 
-#         headers = {
-#             'Content-Type': content_type,
-#             'Accept-Ranges': 'bytes',
-#             'Content-Length': content_length,
-#             'Cache-Control': 'no-cache'
-#         }
+        headers = {
+            'Content-Type': content_type,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': content_length,
+            'Cache-Control': 'no-cache'
+        }
 
-#         return Response(
-#             response.iter_content(chunk_size=8192),
-#             200,
-#             headers=headers,
-#             direct_passthrough=True
-#         )
-#     except Exception as e:
-#         print(f"Streaming error: {str(e)}")
-#         return jsonify({'error': str(e)}), 400
+        return Response(
+            response.iter_content(chunk_size=8192),
+            200,
+            headers=headers,
+            direct_passthrough=True
+        )
+    except Exception as e:
+        print(f"Streaming error: {str(e)}")
+        return jsonify({'error': str(e)}), 400
 
 @app.route('/api/test', methods=['GET'])
 def test():
