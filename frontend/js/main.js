@@ -16,22 +16,19 @@ async function searchTracks(query) {
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
         const data = await response.json();
+        
         console.log('Received data:', data);
         
-        // Directly check if data is an array and has elements
-        if (Array.isArray(data) && data.length > 0) {
-            displayResults(data);
-            return data;
+        if (data.success) {
+            displayResults(data.results);
+            return data.results;
         } else {
-            console.error('No results found or unknown error');
-            displayResults([]); // Clear previous results if no new results
+            console.error('Search failed:', data.error);
             return [];
         }
     } catch (error) {
-        console.error('Error searching tracks:', error.message || error);
-        displayResults([]); // Clear previous results on error
+        console.error('Error searching tracks:', error);
         return [];
     }
 }
