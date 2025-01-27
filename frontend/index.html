@@ -29,29 +29,14 @@
             <div class="player-content">
                 <div class="player-info">
                     <h2 id="now-playing"></h2>
-                    <div class="progress-container">
-                        <div class="time-display">
-                            <span id="current-time">0:00</span>
-                        </div>
-                        <div class="progress-bar-container">
-                            <div class="progress-bar">
-                                <div id="progress-buffer"></div>
-                                <div id="progress-current"></div>
-                            </div>
-                            <input type="range" id="seek-slider" value="0" step="0.1">
-                        </div>
-                        <div class="time-display">
-                            <span id="duration">0:00</span>
-                        </div>
+                    <div class="time-display">
+                        <span id="current-time">0:00</span> / <span id="duration">0:00</span>
                     </div>
                 </div>
                 <div class="player-controls">
                     <audio id="audio-player" preload="auto"></audio>
+                    <input type="range" id="seek-slider" value="0">
                     <div class="control-buttons">
-                        <button id="volume-btn" onclick="toggleMute()">
-                            <i class="fas fa-volume-up"></i>
-                        </button>
-                        <input type="range" id="volume-slider" min="0" max="1" step="0.1" value="1">
                         <button id="play-pause" onclick="togglePlay()">
                             <i class="fas fa-play"></i>
                         </button>
