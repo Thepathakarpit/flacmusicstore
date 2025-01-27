@@ -2,6 +2,10 @@ const API_URL = 'https://flacmusicstore-production.up.railway.app';
 let audioPlayer;
 let currentAudio = null;
 let seeking = false;
+const DB_NAME = 'musicCache';
+const STORE_NAME = 'tracks';
+let db;
+
 
 function initializeAudioPlayer(audioElement) {
     const seekSlider = document.getElementById('seek-slider');
@@ -65,45 +69,166 @@ function initializeAudioPlayer(audioElement) {
     });
 }
 
+
+
+
+const initDB = () => {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+            db = request.result;
+            resolve(db);
+        };
+        
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME, { keyPath: 'fileId' });
+            }
+        };
+    });
+};
+
+class DirectStreamPlayer {
+    constructor(audioElement) {
+        this.audio = audioElement;
+        this.fileId = null;
+        this.driveUrl = null;
+        this.confirmToken = null;
+        
+        // Initialize IndexedDB
+        initDB().catch(console.error);
+    }
+    
+    async getConfirmToken(fileId) {
+        const driveUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+        const response = await fetch(driveUrl);
+        const text = await response.text();
+        
+        // Extract confirmation token from response
+        const match = text.match(/confirm=([0-9A-Za-z]+)/);
+        return match ? match[1] : null;
+    }
+    
+    async getDriveDirectUrl(fileId) {
+        const token = await this.getConfirmToken(fileId);
+        return token ? 
+            `https://drive.google.com/uc?export=download&confirm=${token}&id=${fileId}` :
+            `https://drive.google.com/uc?export=download&id=${fileId}`;
+    }
+    
+    async checkCache(fileId) {
+        return new Promise((resolve) => {
+            const transaction = db.transaction([STORE_NAME], 'readonly');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.get(fileId);
+            
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => resolve(null);
+        });
+    }
+    
+    async cacheTrack(fileId, blob) {
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction([STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.put({
+                fileId,
+                blob,
+                timestamp: Date.now()
+            });
+            
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
+    
+    async loadTrack(fileId, title) {
+        try {
+            // Check local cache first
+            const cached = await this.checkCache(fileId);
+            if (cached) {
+                console.log('Playing from cache');
+                this.audio.src = URL.createObjectURL(cached.blob);
+                await this.audio.play();
+                return;
+            }
+            
+            // Get direct Drive URL if not cached
+            const directUrl = await this.getDriveDirectUrl(fileId);
+            
+            // Stream and cache simultaneously
+            const response = await fetch(directUrl);
+            const blob = await response.blob();
+            
+            // Cache the track
+            await this.cacheTrack(fileId, blob);
+            
+            // Play the track
+            this.audio.src = URL.createObjectURL(blob);
+            await this.audio.play();
+            
+        } catch (error) {
+            console.error('Error loading track:', error);
+            throw error;
+        }
+    }
+    
+    // Cache management - clean old tracks
+    async cleanCache(maxAge = 7 * 24 * 60 * 60 * 1000) { // 7 days
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.openCursor();
+        
+        request.onsuccess = (event) => {
+            const cursor = event.target.result;
+            if (cursor) {
+                if (Date.now() - cursor.value.timestamp > maxAge) {
+                    store.delete(cursor.key);
+                }
+                cursor.continue();
+            }
+        };
+    }
+}
+
+// Initialize the player
+let directPlayer;
+document.addEventListener('DOMContentLoaded', async () => {
+    const audioElement = document.getElementById('audio-player');
+    directPlayer = new DirectStreamPlayer(audioElement);
+    
+    // Clean old cache entries
+    await directPlayer.cleanCache();
+});
+
+// Update playTrack function
 async function playTrack(fileId, title) {
     try {
         const playerContainer = document.getElementById('player-container');
-        const audioPlayer = document.getElementById('audio-player');
         const nowPlaying = document.getElementById('now-playing');
         const playPauseBtn = document.getElementById('play-pause');
         
-        // Stop current audio if playing
-        if (currentAudio && !currentAudio.paused) {
-            currentAudio.pause();
-        }
-
         playerContainer.classList.remove('hidden');
         nowPlaying.textContent = title;
-        
-        // Add timestamp to prevent caching
-        const timestamp = new Date().getTime();
-        const streamUrl = `${API_URL}/stream/${fileId}?t=${timestamp}`;
-        
-        // Reset player state
-        audioPlayer.src = streamUrl;
         playPauseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
         
-        // Initialize new audio player
-        initializeAudioPlayer(audioPlayer);
-        currentAudio = audioPlayer;
+        await directPlayer.loadTrack(fileId, title);
+        playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
         
-        // Start playing
-        const playPromise = audioPlayer.play();
-        if (playPromise !== undefined) {
-            playPromise.catch(error => {
-                console.error('Playback error:', error);
-            });
-        }
     } catch (error) {
         console.error('Error playing track:', error);
         alert('Error playing track. Please try again.');
+        playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
     }
 }
+
+
+
+
+
 
 // Update the formatTime function to handle larger durations
 function formatTime(seconds) {
