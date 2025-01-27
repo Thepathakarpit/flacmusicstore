@@ -13,19 +13,28 @@ SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID")
 
 # Base URL for Google Drive file download
-BASE_DOWNLOAD_URL = "https://drive.google.com/uc?export=download&id="
+BASE_EXPORT_URL = "https://drive.google.com/uc?export=download&id="
 
 def get_drive_service(file_id):
-    try:
+        try:
         # Construct the direct file download URL
-        file_url = f"{BASE_DOWNLOAD_URL}{file_id}"
+        file_url = f"{BASE_EXPORT_URL}{file_id}"
 
         # Send a GET request to download the file
-        response = requests.get(file_url, stream=True)
-        response.raise_for_status()  # Raise error for invalid responses
+        response = requests.get(file_url, stream=True, allow_redirects=True)
+
+        # Handle errors and redirects explicitly
+        if response.status_code == 404:
+            raise Exception("File not found. Ensure the file ID is correct and the file is publicly accessible.")
 
         # Use file ID as fallback file name
         file_name = f"{file_id}.file"
+
+        # Extract filename from headers if available
+        if 'content-disposition' in response.headers:
+            content_disposition = response.headers['content-disposition']
+            if 'filename=' in content_disposition:
+                file_name = content_disposition.split('filename=')[-1].strip('"')
 
         # Ensure the download directory exists
         if not os.path.exists(TEMP_DOWNLOAD_DIR):
