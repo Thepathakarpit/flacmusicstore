@@ -1,5 +1,4 @@
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
@@ -22,33 +21,36 @@ def get_drive_service():
         try:
             client_secret_data = json.loads(creds_json)
             
-            # Modified client configuration
+            # Use web configuration matching your GitHub Pages setup
             client_config = {
-                "installed": {  # Using installed app flow
+                "web": {
                     "client_id": client_secret_data["web"]["client_id"],
                     "client_secret": client_secret_data["web"]["client_secret"],
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [
-                        "https://thepathakarpit.github.io/flacmusicstore/",  # Your production URI
-                        "http://localhost"  # Added localhost for development
-                    ]
+                    "redirect_uris": client_secret_data["web"]["redirect_uris"]
                 }
             }
 
-            flow = InstalledAppFlow.from_client_config(
+            flow = Flow.from_client_config(
                 client_config=client_config,
-                scopes=SCOPES
+                scopes=SCOPES,
+                redirect_uri=client_secret_data["web"]["redirect_uris"][0]
             )
 
-            # Run local server - this will automatically use the first localhost redirect URI
-            creds = flow.run_local_server(
-                port=0,
-                authorization_prompt_message='Please visit this URL: {url}',
-                success_message='The auth flow is complete; you may close this window.',
-                open_browser=True
+            # Generate authorization URL for manual initialization
+            auth_url, _ = flow.authorization_url(
+                access_type='offline',
+                prompt='consent'
             )
-
+            
+            print(f"MANUAL STEP REQUIRED: Visit this URL to authorize:\n{auth_url}")
+            print("Then paste the authorization code below:")
+            code = input("Enter authorization code: ")
+            
+            flow.fetch_token(code=code)
+            creds = flow.credentials
+            
             with open('token.json', 'w') as token:
                 token.write(creds.to_json())
 
@@ -58,7 +60,7 @@ def get_drive_service():
             raise Exception(f"Missing required field in credentials: {str(e)}")
             
     return build('drive', 'v3', credentials=creds)
-    
+
 def stream_file(file_id):
     service = get_drive_service()
     try:
