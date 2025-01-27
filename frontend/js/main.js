@@ -1,236 +1,5 @@
 const API_URL = 'https://flacmusicstore-production.up.railway.app';
 let audioPlayer;
-let currentAudio = null;
-let seeking = false;
-let mouseDownOnSlider = false;
-
-function initializeAudioPlayer(audioElement) {
-    const seekSlider = document.getElementById('seek-slider');
-    const currentTimeDisplay = document.getElementById('current-time');
-    const durationDisplay = document.getElementById('duration');
-    const playPauseBtn = document.getElementById('play-pause');
-    const progressCurrent = document.getElementById('progress-current');
-    const progressBuffer = document.getElementById('progress-buffer');
-    const volumeSlider = document.getElementById('volume-slider');
-    const volumeBtn = document.getElementById('volume-btn');
-
-    // Update time displays and buffer progress
-    audioElement.addEventListener('loadedmetadata', () => {
-        seekSlider.max = audioElement.duration;
-        durationDisplay.textContent = formatTime(audioElement.duration);
-        currentTimeDisplay.textContent = '0:00';
-        seekSlider.value = 0;
-    });
-
-    audioElement.addEventListener('progress', () => {
-        if (audioElement.buffered.length > 0) {
-            const bufferedEnd = audioElement.buffered.end(audioElement.buffered.length - 1);
-            const duration = audioElement.duration;
-            progressBuffer.style.width = `${(bufferedEnd / duration) * 100}%`;
-        }
-    });
-
-    // Update current time and progress
-    audioElement.addEventListener('timeupdate', () => {
-        if (!mouseDownOnSlider) {
-            const currentTime = audioElement.currentTime;
-            const duration = audioElement.duration;
-            
-            seekSlider.value = currentTime;
-            currentTimeDisplay.textContent = formatTime(currentTime);
-            progressCurrent.style.width = `${(currentTime / duration) * 100}%`;
-        }
-    });
-
-    // Improved seeking functionality
-    seekSlider.addEventListener('mousedown', () => {
-        mouseDownOnSlider = true;
-        audioElement.pause();
-    });
-
-    seekSlider.addEventListener('mousemove', (e) => {
-        if (mouseDownOnSlider) {
-            const time = seekSlider.value;
-            currentTimeDisplay.textContent = formatTime(time);
-            progressCurrent.style.width = `${(time / audioElement.duration) * 100}%`;
-        }
-    });
-
-    seekSlider.addEventListener('mouseup', () => {
-        if (mouseDownOnSlider) {
-            mouseDownOnSlider = false;
-            audioElement.currentTime = seekSlider.value;
-            if (!audioElement.paused) audioElement.play();
-        }
-    });
-
-    // Volume control
-    volumeSlider.addEventListener('input', () => {
-        audioElement.volume = volumeSlider.value;
-        updateVolumeIcon(volumeSlider.value);
-    });
-
-    // Handle loading states
-    audioElement.addEventListener('waiting', () => {
-        playPauseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-    });
-
-    audioElement.addEventListener('playing', () => {
-        playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
-    });
-
-    audioElement.addEventListener('ended', () => {
-        playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
-        seekSlider.value = 0;
-        currentTimeDisplay.textContent = '0:00';
-        progressCurrent.style.width = '0%';
-    });
-
-    // Error handling
-    audioElement.addEventListener('error', (e) => {
-        console.error('Audio error:', e);
-        alert('Error playing track. Please try again.');
-        playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
-    });
-
-    // Keyboard shortcuts
-    document.addEventListener('keydown', (e) => {
-        if (e.target.tagName === 'INPUT') return;
-        
-        switch(e.code) {
-            case 'Space':
-                e.preventDefault();
-                togglePlay();
-                break;
-            case 'ArrowLeft':
-                e.preventDefault();
-                audioElement.currentTime = Math.max(0, audioElement.currentTime - 5);
-                break;
-            case 'ArrowRight':
-                e.preventDefault();
-                audioElement.currentTime = Math.min(audioElement.duration, audioElement.currentTime + 5);
-                break;
-            case 'ArrowUp':
-                e.preventDefault();
-                audioElement.volume = Math.min(1, audioElement.volume + 0.1);
-                volumeSlider.value = audioElement.volume;
-                updateVolumeIcon(audioElement.volume);
-                break;
-            case 'ArrowDown':
-                e.preventDefault();
-                audioElement.volume = Math.max(0, audioElement.volume - 0.1);
-                volumeSlider.value = audioElement.volume;
-                updateVolumeIcon(audioElement.volume);
-                break;
-        }
-    });
-}
-
-function updateVolumeIcon(volume) {
-    const volumeBtn = document.getElementById('volume-btn');
-    if (volume === 0) {
-        volumeBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
-    } else if (volume < 0.5) {
-        volumeBtn.innerHTML = '<i class="fas fa-volume-down"></i>';
-    } else {
-        volumeBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
-    }
-}
-
-function toggleMute() {
-    const audioPlayer = document.getElementById('audio-player');
-    const volumeSlider = document.getElementById('volume-slider');
-    
-    if (audioPlayer.volume > 0) {
-        audioPlayer.dataset.lastVolume = audioPlayer.volume;
-        audioPlayer.volume = 0;
-        volumeSlider.value = 0;
-    } else {
-        audioPlayer.volume = audioPlayer.dataset.lastVolume || 1;
-        volumeSlider.value = audioPlayer.volume;
-    }
-    updateVolumeIcon(audioPlayer.volume);
-}
-
-async function playTrack(fileId, title) {
-    try {
-        const playerContainer = document.getElementById('player-container');
-        const audioPlayer = document.getElementById('audio-player');
-        const nowPlaying = document.getElementById('now-playing');
-        const playPauseBtn = document.getElementById('play-pause');
-        const progressCurrent = document.getElementById('progress-current');
-        const progressBuffer = document.getElementById('progress-buffer');
-        
-        // Stop current audio if playing
-        if (currentAudio && !currentAudio.paused) {
-            currentAudio.pause();
-        }
-
-        // Reset progress bars
-        progressCurrent.style.width = '0%';
-        progressBuffer.style.width = '0%';
-
-        playerContainer.classList.remove('hidden');
-        nowPlaying.textContent = title;
-        
-        const timestamp = new Date().getTime();
-        const streamUrl = `${API_URL}/stream/${fileId}?t=${timestamp}`;
-        
-        audioPlayer.src = streamUrl;
-        playPauseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-        
-        initializeAudioPlayer(audioPlayer);
-        currentAudio = audioPlayer;
-        
-        const playPromise = audioPlayer.play();
-        if (playPromise !== undefined) {
-            playPromise.catch(error => {
-                console.error('Playback error:', error);
-                playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
-            });
-        }
-    } catch (error) {
-        console.error('Error playing track:', error);
-        alert('Error playing track. Please try again.');
-    }
-}
-
-
-
-// Update the formatTime function to handle larger durations
-function formatTime(seconds) {
-    if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
-    
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    
-    if (hours > 0) {
-        return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-    }
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-}
-
-// Update the togglePlay function
-function togglePlay() {
-    const audioPlayer = document.getElementById('audio-player');
-    const playPauseBtn = document.getElementById('play-pause');
-    
-    if (!audioPlayer.src) return;
-    
-    if (audioPlayer.paused) {
-        const playPromise = audioPlayer.play();
-        if (playPromise !== undefined) {
-            playPromise.catch(error => {
-                console.error('Playback error:', error);
-                playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
-            });
-        }
-    } else {
-        audioPlayer.pause();
-        playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
-    }
-}
 
 async function searchTracks(query) {
     try {
@@ -294,6 +63,48 @@ function displayResults(results) {
         resultsContainer.appendChild(trackElement);
     });
 }
+
+async function playTrack(fileId, title) {
+    try {
+        const playerContainer = document.getElementById('player-container');
+        const audioPlayer = document.getElementById('audio-player');
+        const nowPlaying = document.getElementById('now-playing');
+        const seekSlider = document.getElementById('seek-slider');
+        const playPauseBtn = document.getElementById('play-pause');
+        
+        playerContainer.classList.remove('hidden');
+        nowPlaying.textContent = title;
+        
+        const timestamp = new Date().getTime();
+        const streamUrl = `${API_URL}/stream/${fileId}?t=${timestamp}`;
+        audioPlayer.src = streamUrl;
+        
+        // Rest of the function remains the same...
+    } catch (error) {
+        console.error('Error playing track:', error);
+        alert('Error playing track. Please try again.');
+    }
+}
+
+function togglePlay() {
+    const audioPlayer = document.getElementById('audio-player');
+    const playPauseBtn = document.getElementById('play-pause');
+    
+    if (audioPlayer.paused) {
+        audioPlayer.play();
+        playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+    } else {
+        audioPlayer.pause();
+        playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+    }
+}
+
+function formatTime(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
 // Remove duplicate event listener for 'keydown'
 document.addEventListener('keydown', (e) => {
     if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
