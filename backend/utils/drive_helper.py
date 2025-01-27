@@ -1,5 +1,5 @@
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 import io
@@ -20,14 +20,21 @@ def get_drive_service():
             raise Exception("Google Drive credentials not found in environment variables")
             
         creds_data = json.loads(creds_json)
-        flow = InstalledAppFlow.from_client_secrets_info(
-            creds_data,
-            SCOPES,
+        
+        # Create a Flow instance directly
+        flow = Flow.from_client_config(
+            client_config=creds_data,
+            scopes=SCOPES,
             redirect_uri='https://your-railway-url.railway.app/oauth2callback'
         )
+        
+        # Run the local server flow
         creds = flow.run_local_server(port=0)
+        
+        # Save the credentials for future use
         with open('token.json', 'w') as token:
             token.write(creds.to_json())
+            
     return build('drive', 'v3', credentials=creds)
 
 def stream_file(file_id):
@@ -83,4 +90,4 @@ def download_file(file_id):
         return file_path
     except Exception as e:
         print(f"Error downloading file: {str(e)}")  # Debug print
-        raise Exception(f"Error downloading file: {str(e)}") 
+        raise Exception(f"Error downloading file: {str(e)}")
