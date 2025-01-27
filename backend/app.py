@@ -6,7 +6,14 @@ from utils.csv_helper import search_tracks
 from config import TRACKS_CSV_PATH, ensure_data_directories
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "https://thepathakarpit.github.io"}})
+# Fix CORS to handle all methods and headers properly
+CORS(app, resources={
+    r"/*": {
+        "origins": "https://thepathakarpit.github.io",
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Range", "Accept", "Accept-Encoding", "Content-Disposition"]
+    }
+})
 
 # Ensure all required directories exist
 ensure_data_directories()
@@ -16,6 +23,13 @@ def search():
     try:
         query = request.args.get('q', '').strip()
         print(f"[Search] Query: '{query}'")
+        
+        if not query:
+            return jsonify({
+                'success': True,
+                'results': [],
+                'count': 0
+            })
         
         if not os.path.exists(TRACKS_CSV_PATH):
             print(f"[Error] tracks.csv not found at {TRACKS_CSV_PATH}")
@@ -35,21 +49,29 @@ def search():
     except Exception as e:
         print(f"[Error] Search failed: {str(e)}")
         return jsonify({
+            'success': False,
             'error': 'Search failed',
             'message': str(e)
         }), 500
 
-@app.route('/api/download/<file_id>', methods=['GET'])
+@app.route('/api/download/<file_id>', methods=['GET', 'OPTIONS'])
 def download(file_id):
+    if request.method == 'OPTIONS':
+        return handle_options_request()
+        
     try:
         print(f"\n=== Starting download for file_id: {file_id} ===")
         
         # Get file metadata first to get the original filename
         service = get_drive_service()
-        file_metadata = service.files().get(fileId=file_id, fields='id,name').execute()
+        file_metadata = service.files().get(fileId=file_id, fields='id,name,mimeType').execute()
+        
+        if not file_metadata:
+            raise Exception("File not found")
+            
         filename = file_metadata.get('name', f'{file_id}.flac')
         
-        print("Streaming file data...")
+        print(f"Streaming file: {filename}")
         file_data = stream_file(file_id)
         
         if not file_data:
@@ -59,9 +81,10 @@ def download(file_id):
         headers = {
             'Access-Control-Allow-Origin': 'https://thepathakarpit.github.io',
             'Access-Control-Allow-Methods': 'GET, OPTIONS',
-            'Access-Control-Expose-Headers': 'Content-Disposition',
+            'Access-Control-Expose-Headers': 'Content-Disposition, Content-Length',
             'Content-Type': 'audio/flac',
-            'Content-Disposition': f'attachment; filename="{filename}"'
+            'Content-Disposition': f'attachment; filename="{filename}"',
+            'Content-Length': len(file_data)
         }
         
         return Response(
@@ -73,12 +96,21 @@ def download(file_id):
         
     except Exception as e:
         print(f"[Error] Download failed: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
-@app.route('/stream/<file_id>')
+@app.route('/stream/<file_id>', methods=['GET', 'OPTIONS'])
 def stream(file_id):
+    if request.method == 'OPTIONS':
+        return handle_options_request()
+        
     try:
         file_data = stream_file(file_id)
+        
+        if not file_data:
+            raise Exception("No data received from stream_file")
         
         headers = {
             'Accept-Ranges': 'bytes',
@@ -86,8 +118,28 @@ def stream(file_id):
             'Access-Control-Allow-Origin': 'https://thepathakarpit.github.io',
             'Access-Control-Allow-Methods': 'GET, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type, Range',
-            'Content-Type': 'audio/flac'
+            'Access-Control-Expose-Headers': 'Content-Length, Accept-Ranges',
+            'Content-Type': 'audio/flac',
+            'Content-Length': len(file_data)
         }
+
+        # Handle range requests
+        range_header = request.headers.get('Range')
+        if range_header:
+            bytes_range = range_header.replace('bytes=', '').split('-')
+            start = int(bytes_range[0])
+            end = int(bytes_range[1]) if bytes_range[1] else len(file_data)
+            
+            if start >= len(file_data):
+                return Response(status=416)  # Range Not Satisfiable
+                
+            headers['Content-Range'] = f'bytes {start}-{end}/{len(file_data)}'
+            return Response(
+                file_data[start:end+1],
+                status=206,
+                mimetype='audio/flac',
+                headers=headers
+            )
 
         return Response(
             file_data,
@@ -97,7 +149,10 @@ def stream(file_id):
         )
     except Exception as e:
         print(f"[Error] Streaming failed: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @app.route('/test')
 def test():
@@ -110,15 +165,16 @@ def test():
             'database_path': TRACKS_CSV_PATH
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
 
-# Add OPTIONS handler for CORS preflight requests
-@app.route('/stream/<file_id>', methods=['OPTIONS'])
-def stream_options(file_id):
+def handle_options_request():
     headers = {
         'Access-Control-Allow-Origin': 'https://thepathakarpit.github.io',
         'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Range',
+        'Access-Control-Allow-Headers': 'Content-Type, Range, Accept, Accept-Encoding, Content-Disposition',
         'Access-Control-Max-Age': '3600'
     }
     return ('', 204, headers)
