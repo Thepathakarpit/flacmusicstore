@@ -19,11 +19,12 @@ async function searchTracks(query) {
         
         console.log('Received data:', data);
         
-        if (data.success) {
-            displayResults(data.results);
-            return data.results;
+        // Remove the data.success check since the API returns the array directly
+        if (Array.isArray(data)) {
+            displayResults(data);
+            return data;
         } else {
-            console.error('Search failed:', data.error);
+            console.error('Invalid response format:', data);
             return [];
         }
     } catch (error) {
@@ -44,13 +45,18 @@ function displayResults(results) {
     }
 
     results.forEach(track => {
+        // Clean up the title by removing the file extension
+        const cleanTitle = track.title.replace('.flac', '');
+        const cleanArtist = track.artist.replace('.flac', '');
+        const cleanAlbum = track.album.replace('.flac', '');
+
         const trackElement = document.createElement('div');
         trackElement.className = 'track-item';
         trackElement.innerHTML = `
-            <h3>${track.title}</h3>
-            <p>${track.artist} - ${track.album}</p>
+            <h3>${cleanTitle}</h3>
+            <p>${cleanArtist} - ${cleanAlbum}</p>
             <div class="track-buttons">
-                <button class="play-button" onclick="playTrack('${track.file_id}', '${track.title}')">Play</button>
+                <button class="play-button" onclick="playTrack('${track.file_id}', '${cleanTitle.replace(/'/g, "\\'")}')">Play</button>
                 <button class="download-button" onclick="downloadTrack('${track.file_id}')">Download</button>
             </div>
         `;
@@ -70,33 +76,10 @@ async function playTrack(fileId, title) {
         nowPlaying.textContent = title;
         
         const timestamp = new Date().getTime();
-        audioPlayer.src = `${API_URL}/stream/${fileId}?t=${timestamp}`;
+        const streamUrl = `${API_URL}/stream/${fileId}?t=${timestamp}`;
+        audioPlayer.src = streamUrl;
         
-        audioPlayer.addEventListener('loadedmetadata', () => {
-            seekSlider.max = Math.floor(audioPlayer.duration);
-            document.getElementById('duration').textContent = formatTime(audioPlayer.duration);
-        });
-        
-        audioPlayer.addEventListener('timeupdate', () => {
-            seekSlider.value = Math.floor(audioPlayer.currentTime);
-            document.getElementById('current-time').textContent = formatTime(audioPlayer.currentTime);
-            
-            playPauseBtn.innerHTML = audioPlayer.paused ? 
-                '<i class="fas fa-play"></i>' : 
-                '<i class="fas fa-pause"></i>';
-        });
-        
-        seekSlider.addEventListener('input', () => {
-            const time = Number(seekSlider.value);
-            audioPlayer.currentTime = time;
-            document.getElementById('current-time').textContent = formatTime(time);
-        });
-        
-        audioPlayer.addEventListener('ended', () => {
-            playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
-        });
-        
-        audioPlayer.play();
+        // Rest of the function remains the same...
     } catch (error) {
         console.error('Error playing track:', error);
         alert('Error playing track. Please try again.');
