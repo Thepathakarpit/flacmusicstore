@@ -132,8 +132,8 @@ async function handleSearch() {
 
 function downloadTrack(fileId) {
     try {
-        console.log('Downloading track:', fileId);
         const downloadUrl = `${API_URL}/api/download/${fileId}`;
+        console.log('Downloading track:', fileId);
         console.log('Download URL:', downloadUrl);
         // Initiate download
         const link = document.createElement('a');
