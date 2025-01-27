@@ -6,62 +6,52 @@ import io
 import os
 import json
 from config import TEMP_DOWNLOAD_DIR
+from flask import url_for, session
 
 SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 
+def create_flow():
+    creds_json = os.environ.get('GOOGLE_DRIVE_CREDENTIALS')
+    if not creds_json:
+        raise Exception("Google Drive credentials not found in environment variables")
+    
+    client_config = {
+        "web": {
+            "client_id": json.loads(creds_json)["web"]["client_id"],
+            "project_id": "flacstore",
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "client_secret": json.loads(creds_json)["web"]["client_secret"],
+            "redirect_uris": json.loads(creds_json)["web"]["redirect_uris"],
+            "javascript_origins": ["https://thepathakarpit.github.io"]
+        }
+    }
+    
+    flow = Flow.from_client_config(
+        client_config=client_config,
+        scopes=SCOPES
+    )
+    flow.redirect_uri = "https://thepathakarpit.github.io/flacmusicstore/"
+    return flow
+
 def get_drive_service():
     creds = None
-    if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    if 'credentials' in session:
+        creds = Credentials.from_authorized_user_info(session['credentials'], SCOPES)
+    
     if not creds or not creds.valid:
-        # Get credentials from environment variable
-        creds_json = os.environ.get('GOOGLE_DRIVE_CREDENTIALS')
-        if not creds_json:
-            raise Exception("Google Drive credentials not found in environment variables")
+        if 'credentials' in session:
+            del session['credentials']
+        return None
         
-        try:
-            # Parse the credentials JSON
-            client_secret_data = json.loads(creds_json)
-            
-            # Ensure the proper format Google expects
-            client_config = {
-                "web": {
-                    "client_id": client_secret_data["web"]["client_id"],
-                    "project_id": "flacstore",  # Add a default project_id
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-                    "client_secret": client_secret_data["web"]["client_secret"],
-                    "redirect_uris": client_secret_data["web"]["redirect_uris"],
-                    "javascript_origins": ["https://thepathakarpit.github.io"]
-                }
-            }
-            
-            # Create flow with the properly formatted config
-            flow = Flow.from_client_config(
-                client_config=client_config,
-                scopes=SCOPES
-            )
-            
-            # Set the redirect URI to match your GitHub Pages URL
-            flow.redirect_uri = "https://thepathakarpit.github.io/flacmusicstore/"
-            
-            # Run the local server flow
-            creds = flow.run_local_server(port=0)
-            
-            # Save the credentials for future use
-            with open('token.json', 'w') as token:
-                token.write(creds.to_json())
-                
-        except json.JSONDecodeError:
-            raise Exception("Invalid JSON format in GOOGLE_DRIVE_CREDENTIALS")
-        except KeyError as e:
-            raise Exception(f"Missing required field in credentials: {str(e)}")
-            
     return build('drive', 'v3', credentials=creds)
 
 def stream_file(file_id):
     service = get_drive_service()
+    if not service:
+        raise Exception("Not authenticated")
+        
     try:
         # Get file metadata first
         file_metadata = service.files().get(fileId=file_id, fields='id,name,mimeType').execute()
@@ -88,6 +78,8 @@ def stream_file(file_id):
 
 def download_file(file_id):
     service = get_drive_service()
+    if not service:
+        raise Exception("Not authenticated")
     
     try:
         # First check if the file exists and is downloadable
