@@ -1,108 +1,80 @@
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import Flow
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
-import io
+from flask import Flask, jsonify, request, send_file, Response, stream_with_context
+from flask_cors import CORS
+import pandas as pd
 import os
-import json
-from config import TEMP_DOWNLOAD_DIR
-from flask import url_for, session
+from utils.drive_helper import download_file, stream_file
+from utils.csv_helper import search_tracks
 
-SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
-
-def create_flow():
-    creds_json = os.environ.get('GOOGLE_DRIVE_CREDENTIALS')
-    if not creds_json:
-        raise Exception("Google Drive credentials not found in environment variables")
-    
-    client_config = {
-        "web": {
-            "client_id": json.loads(creds_json)["web"]["client_id"],
-            "project_id": "flacstore",
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-            "client_secret": json.loads(creds_json)["web"]["client_secret"],
-            "redirect_uris": json.loads(creds_json)["web"]["redirect_uris"],
-            "javascript_origins": ["https://thepathakarpit.github.io"]
-        }
+app = Flask(__name__)
+# Configure CORS to allow requests from your GitHub Pages domain
+CORS(app, resources={
+    r"/api/*": {
+        "origins": "*"
     }
-    
-    flow = Flow.from_client_config(
-        client_config=client_config,
-        scopes=SCOPES
-    )
-    flow.redirect_uri = "https://thepathakarpit.github.io/flacmusicstore/"
-    return flow
+})
 
-def get_drive_service():
-    creds = None
-    if 'credentials' in session:
-        creds = Credentials.from_authorized_user_info(session['credentials'], SCOPES)
-    
-    if not creds or not creds.valid:
-        if 'credentials' in session:
-            del session['credentials']
-        return None
-        
-    return build('drive', 'v3', credentials=creds)
-
-def stream_file(file_id):
-    service = get_drive_service()
-    if not service:
-        raise Exception("Not authenticated")
-        
+@app.route('/api/search', methods=['GET'])
+def search():
     try:
-        # Get file metadata first
-        file_metadata = service.files().get(fileId=file_id, fields='id,name,mimeType').execute()
+        query = request.args.get('q', '')
+        print(f"Searching for: {query}")  # Debug print
         
-        # Get the file content
-        request = service.files().get_media(fileId=file_id)
-        fh = io.BytesIO()
-        downloader = MediaIoBaseDownload(fh, request)
+        # Get absolute path to tracks.csv
+        csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tracks.csv')
+        print(f"CSV path: {csv_path}")
         
-        done = False
-        while not done:
-            status, done = downloader.next_chunk()
-            if status:
-                print(f"Download {int(status.progress() * 100)}%")
-        
-        # Reset buffer position
-        fh.seek(0)
-        
-        # Return the file data
-        return fh.read()
+        if not os.path.exists(csv_path):
+            print(f"Error: tracks.csv not found at {csv_path}")
+            return jsonify({
+                'error': 'Database file not found',
+                'path': csv_path
+            }), 404
+            
+        results = search_tracks(query)
+        print(f"Found {len(results)} results")
+        return jsonify(results)
     except Exception as e:
-        print(f"Error streaming file: {str(e)}")
-        raise Exception(f"Error streaming file: {str(e)}")
+        print(f"Search error: {str(e)}")
+        return jsonify({
+            'error': str(e),
+            'type': type(e).__name__
+        }), 500
 
-def download_file(file_id):
-    service = get_drive_service()
-    if not service:
-        raise Exception("Not authenticated")
-    
+@app.route('/api/download/<file_id>', methods=['GET'])
+def download(file_id):
     try:
-        # First check if the file exists and is downloadable
-        file_metadata = service.files().get(fileId=file_id, fields='id,name,mimeType').execute()
-        print(f"File metadata: {file_metadata}")  # Debug print
-        
-        if 'application/vnd.google-apps.folder' in file_metadata.get('mimeType', ''):
-            raise Exception("Cannot download a folder. Please provide a file ID.")
-        
-        request = service.files().get_media(fileId=file_id)
-        
-        file_path = os.path.join(TEMP_DOWNLOAD_DIR, file_metadata['name'])
-        if not os.path.exists(TEMP_DOWNLOAD_DIR):
-            os.makedirs(TEMP_DOWNLOAD_DIR)
-            
-        fh = io.FileIO(file_path, 'wb')
-        downloader = MediaIoBaseDownload(fh, request)
-        done = False
-        while done is False:
-            status, done = downloader.next_chunk()
-            print(f"Download {int(status.progress() * 100)}%")
-            
-        return file_path
+        file_path = download_file(file_id)
+        return send_file(file_path, as_attachment=True)
     except Exception as e:
-        print(f"Error downloading file: {str(e)}")  # Debug print
-        raise Exception(f"Error downloading file: {str(e)}")
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/stream/<file_id>')
+def stream(file_id):
+    try:
+        # Get the file data
+        file_data = stream_file(file_id)
+        
+        # Return as a streaming response
+        return Response(
+            file_data,
+            mimetype='audio/flac',
+            headers={
+                'Accept-Ranges': 'bytes',
+                'Content-Type': 'audio/flac',
+                'Cache-Control': 'no-cache'
+            }
+        )
+    except Exception as e:
+        print(f"Streaming error: {str(e)}")
+        return jsonify({'error': str(e)}), 400
+
+# Add a test endpoint to verify the service is running
+@app.route('/api/test', methods=['GET'])
+def test():
+    return jsonify({
+        'status': 'ok',
+        'message': 'API is running'
+    })
+
+if __name__ == '__main__':
+    app.run(debug=True) 
