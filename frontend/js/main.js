@@ -64,44 +64,17 @@ function initializeAudioPlayer(audioElement) {
         playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
     });
 }
-
-async function playTrack(fileId, title) {
+async function playTrack(fileId) {
     try {
-        const playerContainer = document.getElementById('player-container');
-        const audioPlayer = document.getElementById('audio-player');
-        const nowPlaying = document.getElementById('now-playing');
-        const playPauseBtn = document.getElementById('play-pause');
-        
-        // Stop current audio if playing
-        if (currentAudio && !currentAudio.paused) {
-            currentAudio.pause();
-        }
+        const response = await fetch(`${API_URL}/stream/${fileId}`);
+        const data = await response.json();
+        if (!data.direct_url) throw new Error('Failed to get direct link');
 
-        playerContainer.classList.remove('hidden');
-        nowPlaying.textContent = title;
-        
-        // Add timestamp to prevent caching
-        const timestamp = new Date().getTime();
-        const streamUrl = `${API_URL}/stream/${fileId}?t=${timestamp}`;
-        
-        // Reset player state
-        audioPlayer.src = streamUrl;
-        playPauseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-        
-        // Initialize new audio player
-        initializeAudioPlayer(audioPlayer);
-        currentAudio = audioPlayer;
-        
-        // Start playing
-        const playPromise = audioPlayer.play();
-        if (playPromise !== undefined) {
-            playPromise.catch(error => {
-                console.error('Playback error:', error);
-            });
-        }
+        const audioPlayer = document.getElementById('audio-player');
+        audioPlayer.src = data.direct_url;
+        audioPlayer.play();
     } catch (error) {
         console.error('Error playing track:', error);
-        alert('Error playing track. Please try again.');
     }
 }
 
@@ -223,7 +196,7 @@ function displayResults(results) {
             <h3>${cleanTitle}</h3>
             <p>${cleanArtist} - ${cleanAlbum}</p>
             <div class="track-buttons">
-                <button class="play-button" onclick="playTrack('${track.file_id}', '${cleanTitle.replace(/'/g, "\\'")}')">Play</button>
+                <button class="play-button" onclick="playTrack('${track.file_id}')">Play</button>
                 <button class="download-button" onclick="downloadTrack('${track.file_id}')">Download</button>
             </div>
         `;
