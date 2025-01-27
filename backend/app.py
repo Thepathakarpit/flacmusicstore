@@ -44,25 +44,47 @@ def search():
 @app.route('/api/download/<file_id>', methods=['GET'])
 def download(file_id):
     try:
+        print(f"\n=== Starting download for file_id: {file_id} ===")
+        
+        # Get file metadata first to get the original filename
+        service = get_drive_service()
+        file_metadata = service.files().get(fileId=file_id, fields='id,name').execute()
+        filename = file_metadata.get('name', f'{file_id}.flac')
+        
         # Add CORS headers for download
         headers = {
             'Access-Control-Allow-Origin': 'https://thepathakarpit.github.io',
             'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Expose-Headers': 'Content-Disposition',
             'Content-Type': 'audio/flac',
-            'Content-Disposition': f'attachment; filename="{file_id}.flac"'
+            'Content-Disposition': f'attachment; filename="{filename}"'
         }
         
-        file_data = stream_file(file_id)  # Use stream_file instead of download_file
+        print("Streaming file data...")
+        file_data = stream_file(file_id)
         
-        return Response(
+        print(f"Received file data of size: {len(file_data)} bytes")
+        
+        if not file_data:
+            raise Exception("No data received from stream_file")
+            
+        print("Creating response...")
+        response = Response(
             file_data,
             mimetype='audio/flac',
             headers=headers,
             direct_passthrough=True
         )
+        
+        print("=== Download process completed successfully ===\n")
+        return response
+        
     except Exception as e:
-        print(f"[Error] Download failed: {str(e)}")
-        return jsonify({'error': str(e)}), 400
+        print("\n=== Error in download endpoint ===")
+        print(f"Error type: {type(e)}")
+        print(f"Error message: {str(e)}")
+        print("=== End of error details ===\n")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/stream/<file_id>')
 def stream(file_id):
