@@ -1,6 +1,6 @@
 # FLAC Music Store
 
-Visit the live site: https://Thepathakarpit.github.io/flacmusicstore/
+Visit the live site: https://Thepathakarpit.github.io/flacmusicstore/frontend/
 
 ## Development
 
