@@ -12,14 +12,30 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 TEMP_DOWNLOAD_DIR = 'temp_downloads'
 BASE_EXPORT_URL = "https://drive.google.com/uc?export=download&id="
 
+def get_confirm_token(response):
+    """Extract confirmation token from Google Drive response"""
+    for key, value in response.cookies.items():
+        if key.startswith('download_warning'):
+            return value
+    return None
+
 def download_and_cache_file(file_id):
-    """Download and cache a file from Google Drive"""
+    """Download and cache a file from Google Drive with confirmation handling"""
     try:
+        session = requests.Session()
+        
+        # First request to get the confirmation token
         file_url = f"{BASE_EXPORT_URL}{file_id}"
-        response = requests.get(file_url, stream=True, allow_redirects=True)
+        response = session.get(file_url, stream=True)
 
         if response.status_code == 404:
             raise Exception("File not found. Ensure the file ID is correct and the file is publicly accessible.")
+
+        # Check if we need to confirm the download
+        token = get_confirm_token(response)
+        if token:
+            params = {'id': file_id, 'confirm': token}
+            response = session.get(BASE_EXPORT_URL, params=params, stream=True)
 
         # Use file ID as fallback file name
         file_name = f"{file_id}.file"
@@ -39,7 +55,8 @@ def download_and_cache_file(file_id):
         # Write the file content to disk
         with open(file_path, 'wb') as file:
             for chunk in response.iter_content(chunk_size=8192):
-                file.write(chunk)
+                if chunk:  # Filter out keep-alive chunks
+                    file.write(chunk)
 
         return file_path
 
@@ -98,9 +115,18 @@ def download(file_id):
 @app.route('/api/stream/<file_id>')
 def stream(file_id):
     try:
-        file_url = f"{BASE_EXPORT_URL}{file_id}"
-        response = requests.get(file_url, stream=True)
+        session = requests.Session()
         
+        # First request to get the confirmation token
+        file_url = f"{BASE_EXPORT_URL}{file_id}"
+        response = session.get(file_url, stream=True)
+        
+        # Check if we need to confirm the download
+        token = get_confirm_token(response)
+        if token:
+            params = {'id': file_id, 'confirm': token}
+            response = session.get(BASE_EXPORT_URL, params=params, stream=True)
+
         if response.status_code != 200:
             raise Exception("Failed to fetch file from Google Drive")
 
