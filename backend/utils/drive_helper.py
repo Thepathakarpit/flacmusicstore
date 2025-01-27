@@ -22,15 +22,16 @@ def get_drive_service(file_id):
 
         # Send a GET request to download the file
         response = requests.get(file_url, stream=True, allow_redirects=True)
+        response.raise_for_status()  # Ensure the request was successful
 
-        # Handle redirects for proper file download
-        if response.status_code == 200 and 'content-disposition' in response.headers:
-            # Extract the file name from content disposition
+        # Extract the file name from headers or use file ID as fallback
+        file_name = file_id
+        if 'content-disposition' in response.headers:
             content_disposition = response.headers['content-disposition']
-            file_name = content_disposition.split("filename=")[-1].strip('"')
+            if 'filename=' in content_disposition:
+                file_name = content_disposition.split("filename=")[-1].strip('"')
         else:
-            # If no file name in headers, use file ID as fallback
-            file_name = f"{file_id}.file"
+            print("Warning: Could not determine file name from response headers.")
 
         # Ensure the download directory exists
         if not os.path.exists(TEMP_DOWNLOAD_DIR):
