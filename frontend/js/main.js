@@ -152,50 +152,135 @@ function toggleMute() {
     updateVolumeIcon(audioPlayer.volume);
 }
 
+
+
+
 async function playTrack(fileId, title) {
     try {
         const playerContainer = document.getElementById('player-container');
         const audioPlayer = document.getElementById('audio-player');
         const nowPlaying = document.getElementById('now-playing');
         const playPauseBtn = document.getElementById('play-pause');
-        
-        // Stop current audio if playing
+        const progressCurrent = document.getElementById('progress-current');
+        const progressBuffer = document.getElementById('progress-buffer');
+
+        // Reset state and UI
         if (currentAudio && !currentAudio.paused) {
             currentAudio.pause();
+            currentAudio.currentTime = 0;
         }
 
+        progressCurrent.style.width = '0%';
+        progressBuffer.style.width = '0%';
+        playPauseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+        // Show player and update title
         playerContainer.classList.remove('hidden');
         nowPlaying.textContent = title;
-        
-        // Add cache-busting only for initial load
+
+        // Set up new audio source with cache-busting
         const timestamp = new Date().getTime();
         const streamUrl = `${API_URL}/stream/${fileId}?t=${timestamp}`;
         
-        // Set proper MIME type and preload metadata
-        audioPlayer.type = 'audio/flac';
-        audioPlayer.preload = 'metadata';
+        // Reset audio player state
+        audioPlayer.removeAttribute('src');
+        audioPlayer.load();
+        
+        // Set new source
         audioPlayer.src = streamUrl;
         
-        playPauseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-        
-        // Wait for metadata to load before playing
-        await new Promise((resolve, reject) => {
-            audioPlayer.addEventListener('loadedmetadata', resolve, { once: true });
-            audioPlayer.addEventListener('error', reject, { once: true });
-        });
-        
+        // Initialize player controls
         initializeAudioPlayer(audioPlayer);
         currentAudio = audioPlayer;
+
+        // Handle playback
+        try {
+            await audioPlayer.play();
+            playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+        } catch (playError) {
+            // Handle user interaction required error
+            if (playError.name === 'NotAllowedError') {
+                playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+                console.log('Playback requires user interaction');
+            } else {
+                throw playError; // Re-throw other play errors
+            }
+        }
+
+        // Add specific error handler for this track
+        audioPlayer.onerror = (e) => {
+            console.error('Audio error:', {
+                error: audioPlayer.error,
+                code: audioPlayer.error.code,
+                message: audioPlayer.error.message,
+                details: e
+            });
+            
+            playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+            
+            // Show user-friendly error message based on error code
+            let errorMessage = 'Error playing track. ';
+            switch (audioPlayer.error.code) {
+                case 1:
+                    errorMessage += 'The audio file cannot be fetched.';
+                    break;
+                case 2:
+                    errorMessage += 'Network error occurred during playback.';
+                    break;
+                case 3:
+                    errorMessage += 'Audio decoding failed.';
+                    break;
+                case 4:
+                    errorMessage += 'Audio format not supported.';
+                    break;
+                default:
+                    errorMessage += 'Please try again.';
+            }
+            alert(errorMessage);
+        };
+
+    } catch (error) {
+        console.error('Error in playTrack:', error);
+        playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+        alert('Error initializing track playback. Please try again.');
+    }
+}
+
+// Helper function to check if audio can be played
+function canPlayAudio(audio) {
+    return audio.readyState >= 2;
+}
+
+// Update togglePlay to include better error handling
+function togglePlay() {
+    const audioPlayer = document.getElementById('audio-player');
+    const playPauseBtn = document.getElementById('play-pause');
+    
+    if (!audioPlayer.src) {
+        console.log('No audio source set');
+        return;
+    }
+    
+    if (audioPlayer.paused) {
+        playPauseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
         
         const playPromise = audioPlayer.play();
         if (playPromise !== undefined) {
-            await playPromise;
+            playPromise
+                .then(() => {
+                    playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+                })
+                .catch(error => {
+                    console.error('Playback error:', error);
+                    playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+                    if (error.name !== 'NotAllowedError') {
+                        alert('Playback error. Please try again.');
+                    }
+                });
         }
-    } catch (error) {
-        console.error('Error playing track:', error);
-        const playPauseBtn = document.getElementById('play-pause');
+    } else {
+        audioPlayer.pause();
         playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
-        alert('Error playing track. Please try again.');
     }
 }
 
@@ -216,25 +301,6 @@ function formatTime(seconds) {
 }
 
 // Update the togglePlay function
-function togglePlay() {
-    const audioPlayer = document.getElementById('audio-player');
-    const playPauseBtn = document.getElementById('play-pause');
-    
-    if (!audioPlayer.src) return;
-    
-    if (audioPlayer.paused) {
-        const playPromise = audioPlayer.play();
-        if (playPromise !== undefined) {
-            playPromise.catch(error => {
-                console.error('Playback error:', error);
-                playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
-            });
-        }
-    } else {
-        audioPlayer.pause();
-        playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
-    }
-}
 
 async function searchTracks(query) {
     try {
