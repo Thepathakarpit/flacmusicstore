@@ -19,15 +19,25 @@ def get_drive_service():
         if not creds_json:
             raise Exception("Google Drive credentials not found in environment variables")
         
-        # Parse the credentials JSON
         try:
-            client_config = json.loads(creds_json)
+            # Parse the credentials JSON
+            client_secret_data = json.loads(creds_json)
             
-            # Ensure the client config has the expected format
-            if 'web' not in client_config:
-                raise Exception("Invalid client config format")
-                
-            # Create the flow with the correct client config format
+            # Ensure the proper format Google expects
+            client_config = {
+                "web": {
+                    "client_id": client_secret_data["web"]["client_id"],
+                    "project_id": "flacstore",  # Add a default project_id
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                    "client_secret": client_secret_data["web"]["client_secret"],
+                    "redirect_uris": client_secret_data["web"]["redirect_uris"],
+                    "javascript_origins": ["https://thepathakarpit.github.io"]
+                }
+            }
+            
+            # Create flow with the properly formatted config
             flow = Flow.from_client_config(
                 client_config=client_config,
                 scopes=SCOPES
@@ -45,6 +55,8 @@ def get_drive_service():
                 
         except json.JSONDecodeError:
             raise Exception("Invalid JSON format in GOOGLE_DRIVE_CREDENTIALS")
+        except KeyError as e:
+            raise Exception(f"Missing required field in credentials: {str(e)}")
             
     return build('drive', 'v3', credentials=creds)
 
