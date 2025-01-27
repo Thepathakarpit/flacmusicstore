@@ -130,11 +130,15 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-function handleSearch() {
+async function handleSearch() {
     try {
         const searchInput = document.getElementById('search-input');
         const query = searchInput.value;
-       
+        
+        // Show loading state
+        const results = await searchTracks(query);
+        
+        // Display results
         displayResults(results);
     } catch (error) {
         console.error('Search failed:', error);
