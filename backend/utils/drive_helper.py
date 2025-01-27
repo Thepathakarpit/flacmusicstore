@@ -89,4 +89,4 @@ def download_file(file_id):
         
     except Exception as e:
         print(f"Error downloading file: {str(e)}")
-        raise 
+        raise Exception(f"Error downloading file: {str(e)}" 
