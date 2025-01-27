@@ -24,11 +24,11 @@ async function searchTracks(query) {
             displayResults(data.results);
             return data.results;
         } else {
-            console.error('Search failed:', data.error);
+            console.error('Search failed:', data.error || 'Unknown error');
             return [];
         }
     } catch (error) {
-        console.error('Error searching tracks:', error);
+        console.error('Error searching tracks:', error.message || error);
         return [];
     }
 }
