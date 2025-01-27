@@ -129,74 +129,16 @@ def download(file_id):
                         mimetype=content_type)
     except Exception as e:
         return jsonify({'error': str(e)}), 400
-
-@app.route('/stream/<file_id>')
+        
+@app.route('/stream/<file_id>', methods=['GET'])
 def stream(file_id):
     try:
-        session = requests.Session()
-        
-        # First request to get the confirmation token
-        file_url = f"{BASE_EXPORT_URL}{file_id}"
-        response = session.get(file_url, stream=True)
-        
-        # Check if we need to confirm the download
-        token = get_confirm_token(response)
-        if token:
-            params = {'id': file_id, 'confirm': token}
-            response = session.get(BASE_EXPORT_URL, params=params, stream=True)
-
-        if response.status_code != 200:
-            raise Exception("Failed to fetch file from Google Drive")
-
-        # Get content type from response headers or filename
-        content_type = response.headers.get('Content-Type', 'audio/flac')
-        if 'content-disposition' in response.headers:
-            filename = response.headers['content-disposition'].split('filename=')[-1].strip('"')
-            content_type = get_content_type(filename)
-
-        # Get file size for Content-Length header
-        content_length = response.headers.get('Content-Length')
-
-        # Handle range requests
-        range_header = request.headers.get('Range', None)
-        if range_header:
-            bytes_range = range_header.replace('bytes=', '').split('-')
-            start = int(bytes_range[0])
-            end = int(bytes_range[1]) if bytes_range[1] else None
-            if end:
-                length = end - start + 1
-            else:
-                length = int(content_length) - start if content_length else None
-            
-            headers = {
-                'Content-Type': content_type,
-                'Accept-Ranges': 'bytes',
-                'Content-Range': f'bytes {start}-{end or int(content_length)-1}/{content_length}',
-                'Content-Length': str(length)
-            }
-            return Response(
-                response.iter_content(chunk_size=8192),
-                206,
-                headers=headers,
-                direct_passthrough=True
-            )
-
-        headers = {
-            'Content-Type': content_type,
-            'Accept-Ranges': 'bytes',
-            'Content-Length': content_length,
-            'Cache-Control': 'no-cache'
-        }
-
-        return Response(
-            response.iter_content(chunk_size=8192),
-            200,
-            headers=headers,
-            direct_passthrough=True
-        )
+        # Construct direct download link for Google Drive
+        direct_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+        return jsonify({"direct_url": direct_url})
     except Exception as e:
-        print(f"Streaming error: {str(e)}")
         return jsonify({'error': str(e)}), 400
+
 
 @app.route('/api/test', methods=['GET'])
 def test():
