@@ -4,6 +4,7 @@ import pandas as pd
 import os
 import requests
 import io
+import mimetypes
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -18,6 +19,19 @@ def get_confirm_token(response):
         if key.startswith('download_warning'):
             return value
     return None
+
+def get_content_type(filename):
+    """Get the content type based on file extension"""
+    extension = os.path.splitext(filename)[1].lower()
+    if extension == '.flac':
+        return 'audio/flac'
+    elif extension == '.mp3':
+        return 'audio/mpeg'
+    elif extension == '.m4a':
+        return 'audio/mp4'
+    elif extension == '.wav':
+        return 'audio/wav'
+    return 'application/octet-stream'
 
 def download_and_cache_file(file_id):
     """Download and cache a file from Google Drive with confirmation handling"""
@@ -108,11 +122,14 @@ def search():
 def download(file_id):
     try:
         file_path = download_and_cache_file(file_id)
-        return send_file(file_path, as_attachment=True)
+        content_type = get_content_type(file_path)
+        return send_file(file_path, 
+                        as_attachment=True,
+                        mimetype=content_type)
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
-@app.route('/api/stream/<file_id>')
+@app.route('/stream/<file_id>')
 def stream(file_id):
     try:
         session = requests.Session()
@@ -130,14 +147,51 @@ def stream(file_id):
         if response.status_code != 200:
             raise Exception("Failed to fetch file from Google Drive")
 
+        # Get content type from response headers or filename
+        content_type = response.headers.get('Content-Type', 'audio/flac')
+        if 'content-disposition' in response.headers:
+            filename = response.headers['content-disposition'].split('filename=')[-1].strip('"')
+            content_type = get_content_type(filename)
+
+        # Get file size for Content-Length header
+        content_length = response.headers.get('Content-Length')
+
+        # Handle range requests
+        range_header = request.headers.get('Range', None)
+        if range_header:
+            bytes_range = range_header.replace('bytes=', '').split('-')
+            start = int(bytes_range[0])
+            end = int(bytes_range[1]) if bytes_range[1] else None
+            if end:
+                length = end - start + 1
+            else:
+                length = int(content_length) - start if content_length else None
+            
+            headers = {
+                'Content-Type': content_type,
+                'Accept-Ranges': 'bytes',
+                'Content-Range': f'bytes {start}-{end or int(content_length)-1}/{content_length}',
+                'Content-Length': str(length)
+            }
+            return Response(
+                response.iter_content(chunk_size=8192),
+                206,
+                headers=headers,
+                direct_passthrough=True
+            )
+
+        headers = {
+            'Content-Type': content_type,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': content_length,
+            'Cache-Control': 'no-cache'
+        }
+
         return Response(
             response.iter_content(chunk_size=8192),
-            mimetype='audio/flac',
-            headers={
-                'Accept-Ranges': 'bytes',
-                'Content-Type': 'audio/flac',
-                'Cache-Control': 'no-cache'
-            }
+            200,
+            headers=headers,
+            direct_passthrough=True
         )
     except Exception as e:
         print(f"Streaming error: {str(e)}")
