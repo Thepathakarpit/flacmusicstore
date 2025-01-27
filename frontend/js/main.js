@@ -20,9 +20,15 @@ async function searchTracks(query) {
         const data = await response.json();
         console.log('Received data:', data);
         
-        // Directly check if data.results is an array and has elements
-            displayResults(data.results);
-            return data.results;
+        // Directly check if data is an array and has elements
+        if (Array.isArray(data) && data.length > 0) {
+            displayResults(data);
+            return data;
+        } else {
+            console.error('No results found or unknown error');
+            displayResults([]); // Clear previous results if no new results
+            return [];
+        }
     } catch (error) {
         console.error('Error searching tracks:', error.message || error);
         displayResults([]); // Clear previous results on error
