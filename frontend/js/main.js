@@ -123,6 +123,7 @@ function formatTime(seconds) {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
+// Remove duplicate event listener for 'keydown'
 document.addEventListener('keydown', (e) => {
     if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
         e.preventDefault();
@@ -130,6 +131,7 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+// Ensure handleSearch is defined and accessible
 async function handleSearch() {
     try {
         const searchInput = document.getElementById('search-input');
@@ -145,6 +147,7 @@ async function handleSearch() {
         alert('Error searching tracks. Please try again.');
     }
 }
+
 function downloadTrack(fileId) {
     try {
         console.log('Downloading track:', fileId);
@@ -154,14 +157,6 @@ function downloadTrack(fileId) {
         alert('Error downloading track. Please try again.');
     }
 }
-
-// Add keyboard shortcuts
-document.addEventListener('keydown', (e) => {
-    if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
-        e.preventDefault();
-        togglePlay();
-    }
-});
 
 // Initialize when the page loads
 document.addEventListener('DOMContentLoaded', () => {
