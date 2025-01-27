@@ -21,16 +21,15 @@ def get_drive_service(file_id):
         file_url = f"{BASE_DOWNLOAD_URL}{file_id}"
 
         # Send a GET request to download the file
-        response = requests.get(file_url, stream=True)
+        response = requests.get(file_url, stream=True, allow_redirects=True)
 
-        # Raise an error if the request was unsuccessful
-        response.raise_for_status()
-
-        # Extract the file name from content disposition or use file ID
-        file_name = response.headers.get('Content-Disposition')
-        if file_name and 'filename=' in file_name:
-            file_name = file_name.split('filename=')[-1].strip('"')
+        # Handle redirects for proper file download
+        if response.status_code == 200 and 'content-disposition' in response.headers:
+            # Extract the file name from content disposition
+            content_disposition = response.headers['content-disposition']
+            file_name = content_disposition.split("filename=")[-1].strip('"')
         else:
+            # If no file name in headers, use file ID as fallback
             file_name = f"{file_id}.file"
 
         # Ensure the download directory exists
