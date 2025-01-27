@@ -16,20 +16,22 @@ async function searchTracks(query) {
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        const data = await response.json();
         
+        const data = await response.json();
         console.log('Received data:', data);
         
-        // Check if results are present and display them
-        if (Array.isArray(data) && data.length > 0) {
-            displayResults(data);
-            return data;
+        // Directly check if data.results is an array and has elements
+        if (data.results && Array.isArray(data.results) && data.results.length > 0) {
+            displayResults(data.results);
+            return data.results;
         } else {
-            console.error('Search failed: No results found or unknown error');
+            console.error('No results found or unknown error');
+            displayResults([]); // Clear previous results if no new results
             return [];
         }
     } catch (error) {
         console.error('Error searching tracks:', error.message || error);
+        displayResults([]); // Clear previous results on error
         return [];
     }
 }
