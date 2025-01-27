@@ -18,22 +18,33 @@ def get_drive_service():
         creds_json = os.environ.get('GOOGLE_DRIVE_CREDENTIALS')
         if not creds_json:
             raise Exception("Google Drive credentials not found in environment variables")
+        
+        # Parse the credentials JSON
+        try:
+            client_config = json.loads(creds_json)
             
-        creds_data = json.loads(creds_json)
-        
-        # Create a Flow instance directly
-        flow = Flow.from_client_config(
-            client_config=creds_data,
-            scopes=SCOPES,
-            redirect_uri='https://your-railway-url.railway.app/oauth2callback'
-        )
-        
-        # Run the local server flow
-        creds = flow.run_local_server(port=0)
-        
-        # Save the credentials for future use
-        with open('token.json', 'w') as token:
-            token.write(creds.to_json())
+            # Ensure the client config has the expected format
+            if 'web' not in client_config:
+                raise Exception("Invalid client config format")
+                
+            # Create the flow with the correct client config format
+            flow = Flow.from_client_config(
+                client_config=client_config,
+                scopes=SCOPES
+            )
+            
+            # Set the redirect URI to match your GitHub Pages URL
+            flow.redirect_uri = "https://thepathakarpit.github.io/flacmusicstore/"
+            
+            # Run the local server flow
+            creds = flow.run_local_server(port=0)
+            
+            # Save the credentials for future use
+            with open('token.json', 'w') as token:
+                token.write(creds.to_json())
+                
+        except json.JSONDecodeError:
+            raise Exception("Invalid JSON format in GOOGLE_DRIVE_CREDENTIALS")
             
     return build('drive', 'v3', credentials=creds)
 
