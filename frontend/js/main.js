@@ -1,5 +1,144 @@
 const API_URL = 'https://flacmusicstore-production.up.railway.app';
 let audioPlayer;
+let currentAudio = null;
+let seeking = false;
+
+function initializeAudioPlayer(audioElement) {
+    const seekSlider = document.getElementById('seek-slider');
+    const currentTimeDisplay = document.getElementById('current-time');
+    const durationDisplay = document.getElementById('duration');
+    const playPauseBtn = document.getElementById('play-pause');
+
+    // Update time displays
+    audioElement.addEventListener('loadedmetadata', () => {
+        seekSlider.max = Math.floor(audioElement.duration);
+        durationDisplay.textContent = formatTime(audioElement.duration);
+        currentTimeDisplay.textContent = '0:00';
+        seekSlider.value = 0;
+    });
+
+    // Update current time
+    audioElement.addEventListener('timeupdate', () => {
+        if (!seeking) {
+            seekSlider.value = Math.floor(audioElement.currentTime);
+            currentTimeDisplay.textContent = formatTime(audioElement.currentTime);
+        }
+    });
+
+    // Handle seeking
+    seekSlider.addEventListener('mousedown', () => {
+        seeking = true;
+    });
+
+    seekSlider.addEventListener('mousemove', (e) => {
+        if (seeking) {
+            const time = formatTime(seekSlider.value);
+            currentTimeDisplay.textContent = time;
+        }
+    });
+
+    seekSlider.addEventListener('mouseup', () => {
+        seeking = false;
+        audioElement.currentTime = seekSlider.value;
+    });
+
+    // Handle loading states
+    audioElement.addEventListener('waiting', () => {
+        playPauseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    });
+
+    audioElement.addEventListener('playing', () => {
+        playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+    });
+
+    audioElement.addEventListener('ended', () => {
+        playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+        seekSlider.value = 0;
+        currentTimeDisplay.textContent = '0:00';
+    });
+
+    // Add error handling
+    audioElement.addEventListener('error', (e) => {
+        console.error('Audio error:', e);
+        alert('Error playing track. Please try again.');
+        playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+    });
+}
+
+async function playTrack(fileId, title) {
+    try {
+        const playerContainer = document.getElementById('player-container');
+        const audioPlayer = document.getElementById('audio-player');
+        const nowPlaying = document.getElementById('now-playing');
+        const playPauseBtn = document.getElementById('play-pause');
+        
+        // Stop current audio if playing
+        if (currentAudio && !currentAudio.paused) {
+            currentAudio.pause();
+        }
+
+        playerContainer.classList.remove('hidden');
+        nowPlaying.textContent = title;
+        
+        // Add timestamp to prevent caching
+        const timestamp = new Date().getTime();
+        const streamUrl = `${API_URL}/stream/${fileId}?t=${timestamp}`;
+        
+        // Reset player state
+        audioPlayer.src = streamUrl;
+        playPauseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        
+        // Initialize new audio player
+        initializeAudioPlayer(audioPlayer);
+        currentAudio = audioPlayer;
+        
+        // Start playing
+        const playPromise = audioPlayer.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                console.error('Playback error:', error);
+            });
+        }
+    } catch (error) {
+        console.error('Error playing track:', error);
+        alert('Error playing track. Please try again.');
+    }
+}
+
+// Update the formatTime function to handle larger durations
+function formatTime(seconds) {
+    if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
+    
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    
+    if (hours > 0) {
+        return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+// Update the togglePlay function
+function togglePlay() {
+    const audioPlayer = document.getElementById('audio-player');
+    const playPauseBtn = document.getElementById('play-pause');
+    
+    if (!audioPlayer.src) return;
+    
+    if (audioPlayer.paused) {
+        const playPromise = audioPlayer.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                console.error('Playback error:', error);
+                playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+            });
+        }
+    } else {
+        audioPlayer.pause();
+        playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+    }
+}
 
 async function searchTracks(query) {
     try {
@@ -63,48 +202,6 @@ function displayResults(results) {
         resultsContainer.appendChild(trackElement);
     });
 }
-
-async function playTrack(fileId, title) {
-    try {
-        const playerContainer = document.getElementById('player-container');
-        const audioPlayer = document.getElementById('audio-player');
-        const nowPlaying = document.getElementById('now-playing');
-        const seekSlider = document.getElementById('seek-slider');
-        const playPauseBtn = document.getElementById('play-pause');
-        
-        playerContainer.classList.remove('hidden');
-        nowPlaying.textContent = title;
-        
-        const timestamp = new Date().getTime();
-        const streamUrl = `${API_URL}/stream/${fileId}?t=${timestamp}`;
-        audioPlayer.src = streamUrl;
-        
-        // Rest of the function remains the same...
-    } catch (error) {
-        console.error('Error playing track:', error);
-        alert('Error playing track. Please try again.');
-    }
-}
-
-function togglePlay() {
-    const audioPlayer = document.getElementById('audio-player');
-    const playPauseBtn = document.getElementById('play-pause');
-    
-    if (audioPlayer.paused) {
-        audioPlayer.play();
-        playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
-    } else {
-        audioPlayer.pause();
-        playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
-    }
-}
-
-function formatTime(seconds) {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-}
-
 // Remove duplicate event listener for 'keydown'
 document.addEventListener('keydown', (e) => {
     if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
