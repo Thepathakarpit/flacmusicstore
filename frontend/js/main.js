@@ -1,6 +1,5 @@
 const API_URL = 'https://flacmusicstore-production.up.railway.app';
 let audioPlayer;
-let isPlaying = false;
 
 async function searchTracks(query) {
     try {
@@ -131,7 +130,6 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-
 // Ensure handleSearch is defined and accessible
 async function handleSearch() {
     try {
@@ -153,6 +151,14 @@ function downloadTrack(fileId) {
     try {
         console.log('Downloading track:', fileId);
         const downloadUrl = `${API_URL}/api/download/${fileId}`;
+        
+        // Initiate download
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = ''; // Optional: specify a filename if needed
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     } catch (error) {
         console.error('Error downloading track:', error);
         alert('Error downloading track. Please try again.');
