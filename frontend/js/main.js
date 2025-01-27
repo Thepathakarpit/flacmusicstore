@@ -21,14 +21,8 @@ async function searchTracks(query) {
         console.log('Received data:', data);
         
         // Directly check if data.results is an array and has elements
-        if (data.results && Array.isArray(data.results) && data.results.length > 0) {
             displayResults(data.results);
             return data.results;
-        } else {
-            console.error('No results found or unknown error');
-            displayResults([]); // Clear previous results if no new results
-            return [];
-        }
     } catch (error) {
         console.error('Error searching tracks:', error.message || error);
         displayResults([]); // Clear previous results on error
