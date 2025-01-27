@@ -17,40 +17,30 @@ BASE_EXPORT_URL = "https://drive.google.com/uc?export=download&id="
 
 def get_drive_service(file_id):
         try:
-        # Construct the direct file download URL
         file_url = f"{BASE_EXPORT_URL}{file_id}"
-
-        # Send a GET request to download the file
         response = requests.get(file_url, stream=True, allow_redirects=True)
 
-        # Handle HTTP errors
         if response.status_code == 404:
             raise Exception("File not found. Ensure the file ID is correct and the file is publicly accessible.")
 
-        # Parse the filename from Content-Disposition header
         file_name = f"{file_id}.file"
         if 'content-disposition' in response.headers:
             content_disposition = response.headers['content-disposition']
             if 'filename=' in content_disposition:
                 file_name = content_disposition.split('filename=')[-1].strip('"')
 
-        # Ensure the download directory exists
-        if not os.path.exists(TEMP_DOWNLOAD_DIR):
-            os.makedirs(TEMP_DOWNLOAD_DIR)
-
         file_path = os.path.join(TEMP_DOWNLOAD_DIR, file_name)
 
-        # Write the file content to disk
         with open(file_path, 'wb') as file:
             for chunk in response.iter_content(chunk_size=8192):
                 file.write(chunk)
 
         print(f"File downloaded successfully: {file_path}")
         return file_path
-
     except requests.RequestException as e:
         print(f"Error downloading file: {str(e)}")
         raise Exception(f"Error downloading file: {str(e)}")
+
 
 def stream_file(file_id):
     service = get_drive_service(file_id)
