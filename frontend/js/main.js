@@ -158,39 +158,43 @@ async function playTrack(fileId, title) {
         const audioPlayer = document.getElementById('audio-player');
         const nowPlaying = document.getElementById('now-playing');
         const playPauseBtn = document.getElementById('play-pause');
-        const progressCurrent = document.getElementById('progress-current');
-        const progressBuffer = document.getElementById('progress-buffer');
         
         // Stop current audio if playing
         if (currentAudio && !currentAudio.paused) {
             currentAudio.pause();
         }
 
-        // Reset progress bars
-        progressCurrent.style.width = '0%';
-        progressBuffer.style.width = '0%';
-
         playerContainer.classList.remove('hidden');
         nowPlaying.textContent = title;
         
+        // Add cache-busting only for initial load
         const timestamp = new Date().getTime();
         const streamUrl = `${API_URL}/stream/${fileId}?t=${timestamp}`;
         
+        // Set proper MIME type and preload metadata
+        audioPlayer.type = 'audio/flac';
+        audioPlayer.preload = 'metadata';
         audioPlayer.src = streamUrl;
+        
         playPauseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        
+        // Wait for metadata to load before playing
+        await new Promise((resolve, reject) => {
+            audioPlayer.addEventListener('loadedmetadata', resolve, { once: true });
+            audioPlayer.addEventListener('error', reject, { once: true });
+        });
         
         initializeAudioPlayer(audioPlayer);
         currentAudio = audioPlayer;
         
         const playPromise = audioPlayer.play();
         if (playPromise !== undefined) {
-            playPromise.catch(error => {
-                console.error('Playback error:', error);
-                playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
-            });
+            await playPromise;
         }
     } catch (error) {
         console.error('Error playing track:', error);
+        const playPauseBtn = document.getElementById('play-pause');
+        playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
         alert('Error playing track. Please try again.');
     }
 }
