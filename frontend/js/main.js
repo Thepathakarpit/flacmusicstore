@@ -119,6 +119,18 @@ function formatTime(seconds) {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
+
+function updateVolumeIcon(volume) {
+    const volumeBtn = document.getElementById('volume-btn');
+    if (volume === 0) {
+        volumeBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
+    } else if (volume < 0.5) {
+        volumeBtn.innerHTML = '<i class="fas fa-volume-down"></i>';
+    } else {
+        volumeBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
+    }
+}
+
 function toggleMute() {
     const audioPlayer = document.getElementById('audio-player');
     const volumeSlider = document.getElementById('volume-slider');
