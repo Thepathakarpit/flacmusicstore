@@ -7,6 +7,7 @@ const STORE_NAME = 'tracks';
 let db;
 
 
+
 function initializeAudioPlayer(audioElement) {
     const seekSlider = document.getElementById('seek-slider');
     const currentTimeDisplay = document.getElementById('current-time');
@@ -70,8 +71,7 @@ function initializeAudioPlayer(audioElement) {
 }
 
 
-
-
+// Initialize IndexedDB
 const initDB = () => {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, 1);
@@ -97,51 +97,83 @@ class DirectStreamPlayer {
         this.fileId = null;
         this.driveUrl = null;
         this.confirmToken = null;
+        this.dbInitialized = false;
         
         // Initialize IndexedDB
-        initDB().catch(console.error);
+        initDB()
+            .then(() => {
+                this.dbInitialized = true;
+                console.log('IndexedDB initialized successfully');
+            })
+            .catch(error => {
+                console.error('Error initializing IndexedDB:', error);
+            });
     }
     
     async getConfirmToken(fileId) {
-        const driveUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
-        const response = await fetch(driveUrl);
-        const text = await response.text();
-        
-        // Extract confirmation token from response
-        const match = text.match(/confirm=([0-9A-Za-z]+)/);
-        return match ? match[1] : null;
+        try {
+            const driveUrl = `${API_URL}/api/stream/${fileId}`;
+            const response = await fetch(driveUrl);
+            if (!response.ok) throw new Error('Failed to get confirmation token');
+            const text = await response.text();
+            
+            const match = text.match(/confirm=([0-9A-Za-z]+)/);
+            return match ? match[1] : null;
+        } catch (error) {
+            console.error('Error getting confirm token:', error);
+            throw error;
+        }
     }
     
     async getDriveDirectUrl(fileId) {
-        const token = await this.getConfirmToken(fileId);
-        return token ? 
-            `https://drive.google.com/uc?export=download&confirm=${token}&id=${fileId}` :
-            `https://drive.google.com/uc?export=download&id=${fileId}`;
+        try {
+            const token = await this.getConfirmToken(fileId);
+            return token ? 
+                `${API_URL}/api/stream/${fileId}?confirm=${token}` :
+                `${API_URL}/api/stream/${fileId}`;
+        } catch (error) {
+            console.error('Error getting drive direct URL:', error);
+            throw error;
+        }
     }
     
     async checkCache(fileId) {
+        if (!this.dbInitialized || !db) return null;
+        
         return new Promise((resolve) => {
-            const transaction = db.transaction([STORE_NAME], 'readonly');
-            const store = transaction.objectStore(STORE_NAME);
-            const request = store.get(fileId);
-            
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => resolve(null);
+            try {
+                const transaction = db.transaction([STORE_NAME], 'readonly');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.get(fileId);
+                
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => resolve(null);
+            } catch (error) {
+                console.error('Error checking cache:', error);
+                resolve(null);
+            }
         });
     }
     
     async cacheTrack(fileId, blob) {
+        if (!this.dbInitialized || !db) return;
+        
         return new Promise((resolve, reject) => {
-            const transaction = db.transaction([STORE_NAME], 'readwrite');
-            const store = transaction.objectStore(STORE_NAME);
-            const request = store.put({
-                fileId,
-                blob,
-                timestamp: Date.now()
-            });
-            
-            request.onsuccess = () => resolve();
-            request.onerror = () => reject(request.error);
+            try {
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.put({
+                    fileId,
+                    blob,
+                    timestamp: Date.now()
+                });
+                
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            } catch (error) {
+                console.error('Error caching track:', error);
+                reject(error);
+            }
         });
     }
     
@@ -156,15 +188,17 @@ class DirectStreamPlayer {
                 return;
             }
             
-            // Get direct Drive URL if not cached
-            const directUrl = await this.getDriveDirectUrl(fileId);
+            // Get streaming URL
+            const streamUrl = `${API_URL}/api/stream/${fileId}`;
+            const response = await fetch(streamUrl);
+            if (!response.ok) throw new Error('Failed to stream track');
             
-            // Stream and cache simultaneously
-            const response = await fetch(directUrl);
             const blob = await response.blob();
             
-            // Cache the track
-            await this.cacheTrack(fileId, blob);
+            // Cache the track if DB is initialized
+            if (this.dbInitialized) {
+                await this.cacheTrack(fileId, blob);
+            }
             
             // Play the track
             this.audio.src = URL.createObjectURL(blob);
@@ -176,21 +210,26 @@ class DirectStreamPlayer {
         }
     }
     
-    // Cache management - clean old tracks
-    async cleanCache(maxAge = 7 * 24 * 60 * 60 * 1000) { // 7 days
-        const transaction = db.transaction([STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.openCursor();
+    async cleanCache(maxAge = 7 * 24 * 60 * 60 * 1000) {
+        if (!this.dbInitialized || !db) return;
         
-        request.onsuccess = (event) => {
-            const cursor = event.target.result;
-            if (cursor) {
-                if (Date.now() - cursor.value.timestamp > maxAge) {
-                    store.delete(cursor.key);
+        try {
+            const transaction = db.transaction([STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.openCursor();
+            
+            request.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    if (Date.now() - cursor.value.timestamp > maxAge) {
+                        store.delete(cursor.key);
+                    }
+                    cursor.continue();
                 }
-                cursor.continue();
-            }
-        };
+            };
+        } catch (error) {
+            console.error('Error cleaning cache:', error);
+        }
     }
 }
 
@@ -198,11 +237,26 @@ class DirectStreamPlayer {
 let directPlayer;
 document.addEventListener('DOMContentLoaded', async () => {
     const audioElement = document.getElementById('audio-player');
+    if (!audioElement) {
+        console.error('Audio element not found');
+        return;
+    }
+    
     directPlayer = new DirectStreamPlayer(audioElement);
+    initializeAudioPlayer(audioElement);
     
     // Clean old cache entries
-    await directPlayer.cleanCache();
+    try {
+        await directPlayer.cleanCache();
+    } catch (error) {
+        console.error('Error cleaning cache:', error);
+    }
 });
+
+
+
+
+
 
 // Update playTrack function
 async function playTrack(fileId, title) {
@@ -210,6 +264,11 @@ async function playTrack(fileId, title) {
         const playerContainer = document.getElementById('player-container');
         const nowPlaying = document.getElementById('now-playing');
         const playPauseBtn = document.getElementById('play-pause');
+        
+        if (!playerContainer || !nowPlaying || !playPauseBtn) {
+            console.error('Required elements not found');
+            return;
+        }
         
         playerContainer.classList.remove('hidden');
         nowPlaying.textContent = title;
@@ -221,10 +280,12 @@ async function playTrack(fileId, title) {
     } catch (error) {
         console.error('Error playing track:', error);
         alert('Error playing track. Please try again.');
-        playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+        const playPauseBtn = document.getElementById('play-pause');
+        if (playPauseBtn) {
+            playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+        }
     }
 }
-
 
 
 
