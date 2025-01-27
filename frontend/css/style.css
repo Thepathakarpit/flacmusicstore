@@ -4,6 +4,8 @@
     --text-color: #ffffff;
     --background-color: #121212;
     --card-background: #282828;
+    --hover-color: rgba(255, 255, 255, 0.1);
+    --transition-speed: 0.3s;
 }
 
 * {
@@ -17,6 +19,7 @@ body {
     background-color: var(--background-color);
     color: var(--text-color);
     line-height: 1.6;
+    overflow-x: hidden;
 }
 
 .container {
@@ -28,12 +31,14 @@ body {
 header {
     text-align: center;
     margin-bottom: 40px;
+    animation: fadeIn 1s ease-in-out;
 }
 
 h1 {
     font-size: 2.5em;
     margin-bottom: 20px;
     color: var(--primary-color);
+    animation: slideIn 1s ease-in-out;
 }
 
 .search-container {
@@ -41,6 +46,7 @@ h1 {
     justify-content: center;
     gap: 10px;
     margin: 20px 0;
+    animation: fadeIn 1.5s ease-in-out;
 }
 
 input[type="text"] {
@@ -51,6 +57,12 @@ input[type="text"] {
     border-radius: 25px;
     background-color: var(--card-background);
     color: var(--text-color);
+    transition: all var(--transition-speed) ease;
+}
+
+input[type="text"]:focus {
+    outline: none;
+    box-shadow: 0 0 10px rgba(29, 185, 84, 0.5);
 }
 
 button {
@@ -61,11 +73,12 @@ button {
     border: none;
     border-radius: 25px;
     cursor: pointer;
-    transition: transform 0.2s;
+    transition: transform var(--transition-speed) ease, background-color var(--transition-speed) ease;
 }
 
 button:hover {
     transform: scale(1.05);
+    background-color: #1ed760;
 }
 
 .track-item {
@@ -73,11 +86,12 @@ button:hover {
     padding: 20px;
     margin-bottom: 15px;
     border-radius: 10px;
-    transition: transform 0.2s;
+    transition: transform var(--transition-speed) ease, box-shadow var(--transition-speed) ease;
 }
 
 .track-item:hover {
-    transform: translateY(-2px);
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
 }
 
 .track-item h3 {
@@ -102,7 +116,13 @@ button:hover {
     right: 0;
     background: var(--card-background);
     padding: 20px;
-    box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
+    transition: transform var(--transition-speed) ease;
+    transform: translateY(100%);
+}
+
+#player-container.visible {
+    transform: translateY(0);
 }
 
 .player-content {
@@ -141,6 +161,7 @@ button:hover {
     background: #4f4f4f;
     border-radius: 2px;
     cursor: pointer;
+    transition: background var(--transition-speed) ease;
 }
 
 #seek-slider::-webkit-slider-thumb {
@@ -150,6 +171,11 @@ button:hover {
     background: var(--primary-color);
     border-radius: 50%;
     cursor: pointer;
+    transition: transform var(--transition-speed) ease;
+}
+
+#seek-slider:hover::-webkit-slider-thumb {
+    transform: scale(1.2);
 }
 
 .control-buttons {
@@ -168,6 +194,12 @@ button:hover {
     background-color: var(--primary-color);
     border: none;
     cursor: pointer;
+    transition: transform var(--transition-speed) ease, background-color var(--transition-speed) ease;
+}
+
+#play-pause:hover {
+    transform: scale(1.1);
+    background-color: #1ed760;
 }
 
 .hidden {
@@ -207,9 +239,10 @@ button:hover {
     background: white;
     border-radius: 4px;
     padding: 12px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     width: 300px;
     z-index: 1000;
+    animation: slideInRight 0.5s ease-in-out;
 }
 
 #download-toast.hidden {
@@ -244,106 +277,41 @@ button:hover {
     transition: width 0.3s;
 }
 
-/* Make the audio player controls more visible */
-audio::-webkit-media-controls-panel {
-    background-color: #f5f5f5;
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
 }
 
-audio::-webkit-media-controls-play-button,
-audio::-webkit-media-controls-timeline {
-    cursor: pointer;
+@keyframes slideIn {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
 }
 
-audio::-webkit-media-controls-current-time-display,
-audio::-webkit-media-controls-time-remaining-display {
-    font-size: 14px;
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+    }
+    to {
+        transform: translateX(0);
+    }
 }
 
-#audio-player {
-    display: none;
-}
-
-.player-content {
-    background: #1a1a1a;
-    padding: 1rem;
-    border-radius: 8px;
-    color: white;
-}
-
-.progress-container {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin: 1rem 0;
-}
-
-.progress-bar-container {
-    flex: 1;
-    position: relative;
-    height: 36px;
-    display: flex;
-    align-items: center;
-}
-
-.progress-bar {
-    position: absolute;
-    width: 100%;
-    height: 4px;
-    background: #333;
-    border-radius: 2px;
-    overflow: hidden;
-}
-
-#progress-buffer {
-    position: absolute;
-    height: 100%;
-    background: #555;
-    width: 0;
-}
-
-#progress-current {
-    position: absolute;
-    height: 100%;
-    background: #1db954;
-    width: 0;
-}
-
-#seek-slider {
-    position: relative;
-    width: 100%;
-    margin: 0;
-    opacity: 0;
-    cursor: pointer;
-    z-index: 2;
-}
-
-.control-buttons {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 1rem;
-    margin-top: 1rem;
-}
-
-.control-buttons button {
-    background: none;
-    border: none;
-    color: white;
-    cursor: pointer;
-    padding: 0.5rem;
-    border-radius: 50%;
-    transition: background-color 0.2s;
-}
-
-.control-buttons button:hover {
-    background: rgba(255, 255, 255, 0.1);
-}
-
-#volume-slider {
-    width: 100px;
-}
-
-.time-display {
-    font-family: monospace;
-    min-width: 45px;
+@keyframes slideUp {
+    from {
+        transform: translateY(100%);
+    }
+    to {
+        transform: translateY(0);
+    }
 }
