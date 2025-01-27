@@ -261,12 +261,123 @@ audio::-webkit-media-controls-time-remaining-display {
 
 #audio-player {
     display: none;
-} 
+}
+
+.player-content {
+    background: #1a1a1a;
+    padding: 1rem;
+    border-radius: 8px;
+    color: white;
+}
+
+.progress-container {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.progress-bar-container {
+    flex: 1;
+    position: relative;
+    height: 36px;
+    display: flex;
+    align-items: center;
+}
+
+.progress-bar {
+    position: absolute;
+    width: 100%;
+    height: 4px;
+    background: #333;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+#progress-buffer {
+    position: absolute;
+    height: 100%;
+    background: #555;
+    width: 0;
+}
+
+#progress-current {
+    position: absolute;
+    height: 100%;
+    background: #1db954;
+    width: 0;
+}
+
+#seek-slider {
+    position: relative;
+    width: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 2;
+}
+
+.control-buttons {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.control-buttons button {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+.control-buttons button:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+#volume-slider {
+    width: 100px;
+}
+
+.time-display {
+    font-family: monospace;
+    min-width: 45px;
+}
+
+/* Loading animation */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 .fa-spinner {
     animation: spin 1s linear infinite;
 }
 
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+/* Volume hover effect */
+#volume-btn:hover + #volume-slider,
+#volume-slider:hover {
+    opacity: 1;
+}
+
+#volume-slider {
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+/* Track items hover effect */
+.track-item {
+    transition: transform 0.2s, background-color 0.2s;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+}
+
+.track-item:hover {
+    transform: translateX(10px);
+    background-color: rgba(29, 185, 84, 0.1);
 }
