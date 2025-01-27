@@ -4,16 +4,59 @@ let isPlaying = false;
 
 async function searchTracks(query) {
     try {
-        const response = await fetch(`${API_URL}/api/search?q=${encodeURIComponent(query)}`);
+        if (!query || query.trim() === '') {
+            console.log('Empty search query');
+            return [];
+        }
+        
+        const searchUrl = `${API_URL}/api/search?q=${encodeURIComponent(query)}`;
+        console.log('Searching:', searchUrl);
+        
+        const response = await fetch(searchUrl);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        return data;
+        
+        console.log('Received data:', data);
+        
+        if (data.success) {
+            displayResults(data.results);
+            return data.results;
+        } else {
+            console.error('Search failed:', data.error);
+            return [];
+        }
     } catch (error) {
         console.error('Error searching tracks:', error);
-        throw error;
+        return [];
     }
+}
+
+function displayResults(results) {
+    const resultsContainer = document.getElementById('results');
+    resultsContainer.innerHTML = ''; // Clear previous results
+
+    console.log('Displaying results:', results);
+
+    if (!results || results.length === 0) {
+        resultsContainer.innerHTML = '<p>No results found</p>';
+        return;
+    }
+
+    results.forEach(track => {
+        const trackElement = document.createElement('div');
+        trackElement.className = 'track-item';
+        trackElement.innerHTML = `
+            <h3>${track.title}</h3>
+            <p>${track.artist} - ${track.album}</p>
+            <div class="track-buttons">
+                <button class="play-button" onclick="playTrack('${track.file_id}', '${track.title}')">Play</button>
+                <button class="download-button" onclick="downloadTrack('${track.file_id}')">Download</button>
+            </div>
+        `;
+        resultsContainer.appendChild(trackElement);
+    });
 }
 
 async function playTrack(fileId, title) {
@@ -27,7 +70,6 @@ async function playTrack(fileId, title) {
         playerContainer.classList.remove('hidden');
         nowPlaying.textContent = title;
         
-        // Set audio source with cache-busting parameter
         const timestamp = new Date().getTime();
         audioPlayer.src = `${API_URL}/stream/${fileId}?t=${timestamp}`;
         
@@ -40,7 +82,6 @@ async function playTrack(fileId, title) {
             seekSlider.value = Math.floor(audioPlayer.currentTime);
             document.getElementById('current-time').textContent = formatTime(audioPlayer.currentTime);
             
-            // Update play/pause button
             playPauseBtn.innerHTML = audioPlayer.paused ? 
                 '<i class="fas fa-play"></i>' : 
                 '<i class="fas fa-pause"></i>';
@@ -82,10 +123,48 @@ function formatTime(seconds) {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
+        e.preventDefault();
+        togglePlay();
+    }
+});
+
+async function handleSearch() {
+    try {
+        const searchInput = document.getElementById('search-input');
+        const query = searchInput.value;
+        
+        // Show loading state
+        const results = await searchTracks(query);
+        
+        // Display results
+        displayResults(results);
+    } catch (error) {
+        console.error('Search failed:', error);
+        alert('Error searching tracks. Please try again.');
+    }
+}
+function downloadTrack(fileId) {
+    try {
+        console.log('Downloading track:', fileId);
+        const downloadUrl = `${API_URL}/api/download/${fileId}`;
+    } catch (error) {
+        console.error('Error downloading track:', error);
+        alert('Error downloading track. Please try again.');
+    }
+}
+
 // Add keyboard shortcuts
 document.addEventListener('keydown', (e) => {
     if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
         e.preventDefault();
         togglePlay();
     }
+});
+
+// Initialize when the page loads
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('Page loaded, initializing...');
+    audioPlayer = document.getElementById('audio-player');
 }); 
