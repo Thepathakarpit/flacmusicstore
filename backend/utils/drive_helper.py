@@ -2,6 +2,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
+import requests
 import io
 import os
 import json
@@ -9,55 +10,49 @@ from config import TEMP_DOWNLOAD_DIR
 
 SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 
-def get_drive_service():
-    creds = None
-    if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID")
 
-    if not creds or not creds.valid:
-        # Get credentials from environment variable
-        creds_json = os.environ.get('GOOGLE_DRIVE_CREDENTIALS')
-        if not creds_json:
-            raise Exception("Google Drive credentials not found in environment variables")
+# Base URL for Google Drive file download
+BASE_DOWNLOAD_URL = "https://drive.google.com/uc?export=download&id="
 
-        try:
-            # Parse the credentials JSON
-            client_secret_data = json.loads(creds_json)
+def get_drive_service(file_id):
+    try:
+        # Construct the file download URL
+        file_url = f"{BASE_DOWNLOAD_URL}{file_id}"
 
-            # Ensure the proper format Google expects
-            client_config = {
-                "web": {
-                    "client_id": client_secret_data["web"]["client_id"],
-                    "project_id": client_secret_data["web"].get("project_id", "default_project"),
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-                    "client_secret": client_secret_data["web"]["client_secret"],
-                    "redirect_uris": client_secret_data["web"].get("redirect_uris", []),
-                    "javascript_origins": client_secret_data["web"].get("javascript_origins", [])
-                }
-            }
+        # Send a GET request to download the file
+        response = requests.get(file_url, stream=True)
 
-            # Create flow with the properly formatted config
-            flow = Flow.from_client_config(
-                client_config=client_config,
-                scopes=SCOPES
-            )
+        # Raise an error if the request was unsuccessful
+        response.raise_for_status()
 
-            # Set the redirect URI to match your environment
-            flow.redirect_uri = client_config["web"]["redirect_uris"][0] if client_config["web"].get("redirect_uris") else None
+        # Extract the file name from content disposition or use file ID
+        file_name = response.headers.get('Content-Disposition')
+        if file_name and 'filename=' in file_name:
+            file_name = file_name.split('filename=')[-1].strip('"')
+        else:
+            file_name = f"{file_id}.file"
 
-            # Note: The user needs to complete the authorization manually if credentials are missing
-            raise Exception("Credentials are not valid or need user authorization.")
-        except json.JSONDecodeError:
-            raise Exception("Invalid JSON format in GOOGLE_DRIVE_CREDENTIALS")
-        except KeyError as e:
-            raise Exception(f"Missing required field in credentials: {str(e)}")
+        # Ensure the download directory exists
+        if not os.path.exists(TEMP_DOWNLOAD_DIR):
+            os.makedirs(TEMP_DOWNLOAD_DIR)
 
-    return build('drive', 'v3', credentials=creds)
+        file_path = os.path.join(TEMP_DOWNLOAD_DIR, file_name)
+
+        # Write the content to a file
+        with open(file_path, 'wb') as file:
+            for chunk in response.iter_content(chunk_size=8192):
+                file.write(chunk)
+
+        print(f"File downloaded successfully: {file_path}")
+        return file_path
+
+    except requests.RequestException as e:
+        print(f"Error downloading file: {str(e)}")
+        raise Exception(f"Error downloading file: {str(e)}")
 
 def stream_file(file_id):
-    service = get_drive_service()
+    service = get_drive_service(file_id)
     try:
         # Get file metadata first
         file_metadata = service.files().get(fileId=file_id, fields='id,name,mimeType').execute()
@@ -84,7 +79,7 @@ def stream_file(file_id):
         raise Exception(f"Error streaming file: {str(e)}")
 
 def download_file(file_id):
-    service = get_drive_service()
+    service = get_drive_service(file_id)
 
     try:
         # First check if the file exists and is downloadable
