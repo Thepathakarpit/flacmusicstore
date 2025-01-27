@@ -347,37 +347,3 @@ audio::-webkit-media-controls-time-remaining-display {
     font-family: monospace;
     min-width: 45px;
 }
-
-/* Loading animation */
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-.fa-spinner {
-    animation: spin 1s linear infinite;
-}
-
-/* Volume hover effect */
-#volume-btn:hover + #volume-slider,
-#volume-slider:hover {
-    opacity: 1;
-}
-
-#volume-slider {
-    opacity: 0.7;
-    transition: opacity 0.2s;
-}
-
-/* Track items hover effect */
-.track-item {
-    transition: transform 0.2s, background-color 0.2s;
-    padding: 1rem;
-    border-radius: 8px;
-    margin-bottom: 0.5rem;
-}
-
-.track-item:hover {
-    transform: translateX(10px);
-    background-color: rgba(29, 185, 84, 0.1);
-}
