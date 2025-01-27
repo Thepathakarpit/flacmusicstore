@@ -2,44 +2,72 @@ const API_URL = 'https://flacmusicstore-production.up.railway.app';
 let audioPlayer;
 let currentAudio = null;
 let seeking = false;
+let mouseDownOnSlider = false;
 
 function initializeAudioPlayer(audioElement) {
     const seekSlider = document.getElementById('seek-slider');
     const currentTimeDisplay = document.getElementById('current-time');
     const durationDisplay = document.getElementById('duration');
     const playPauseBtn = document.getElementById('play-pause');
+    const progressCurrent = document.getElementById('progress-current');
+    const progressBuffer = document.getElementById('progress-buffer');
+    const volumeSlider = document.getElementById('volume-slider');
+    const volumeBtn = document.getElementById('volume-btn');
 
-    // Update time displays
+    // Update time displays and buffer progress
     audioElement.addEventListener('loadedmetadata', () => {
-        seekSlider.max = Math.floor(audioElement.duration);
+        seekSlider.max = audioElement.duration;
         durationDisplay.textContent = formatTime(audioElement.duration);
         currentTimeDisplay.textContent = '0:00';
         seekSlider.value = 0;
     });
 
-    // Update current time
-    audioElement.addEventListener('timeupdate', () => {
-        if (!seeking) {
-            seekSlider.value = Math.floor(audioElement.currentTime);
-            currentTimeDisplay.textContent = formatTime(audioElement.currentTime);
+    audioElement.addEventListener('progress', () => {
+        if (audioElement.buffered.length > 0) {
+            const bufferedEnd = audioElement.buffered.end(audioElement.buffered.length - 1);
+            const duration = audioElement.duration;
+            progressBuffer.style.width = `${(bufferedEnd / duration) * 100}%`;
         }
     });
 
-    // Handle seeking
+    // Update current time and progress
+    audioElement.addEventListener('timeupdate', () => {
+        if (!mouseDownOnSlider) {
+            const currentTime = audioElement.currentTime;
+            const duration = audioElement.duration;
+            
+            seekSlider.value = currentTime;
+            currentTimeDisplay.textContent = formatTime(currentTime);
+            progressCurrent.style.width = `${(currentTime / duration) * 100}%`;
+        }
+    });
+
+    // Improved seeking functionality
     seekSlider.addEventListener('mousedown', () => {
-        seeking = true;
+        mouseDownOnSlider = true;
+        audioElement.pause();
     });
 
     seekSlider.addEventListener('mousemove', (e) => {
-        if (seeking) {
-            const time = formatTime(seekSlider.value);
-            currentTimeDisplay.textContent = time;
+        if (mouseDownOnSlider) {
+            const time = seekSlider.value;
+            currentTimeDisplay.textContent = formatTime(time);
+            progressCurrent.style.width = `${(time / audioElement.duration) * 100}%`;
         }
     });
 
     seekSlider.addEventListener('mouseup', () => {
-        seeking = false;
-        audioElement.currentTime = seekSlider.value;
+        if (mouseDownOnSlider) {
+            mouseDownOnSlider = false;
+            audioElement.currentTime = seekSlider.value;
+            if (!audioElement.paused) audioElement.play();
+        }
+    });
+
+    // Volume control
+    volumeSlider.addEventListener('input', () => {
+        audioElement.volume = volumeSlider.value;
+        updateVolumeIcon(volumeSlider.value);
     });
 
     // Handle loading states
@@ -55,14 +83,73 @@ function initializeAudioPlayer(audioElement) {
         playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
         seekSlider.value = 0;
         currentTimeDisplay.textContent = '0:00';
+        progressCurrent.style.width = '0%';
     });
 
-    // Add error handling
+    // Error handling
     audioElement.addEventListener('error', (e) => {
         console.error('Audio error:', e);
         alert('Error playing track. Please try again.');
         playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
     });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT') return;
+        
+        switch(e.code) {
+            case 'Space':
+                e.preventDefault();
+                togglePlay();
+                break;
+            case 'ArrowLeft':
+                e.preventDefault();
+                audioElement.currentTime = Math.max(0, audioElement.currentTime - 5);
+                break;
+            case 'ArrowRight':
+                e.preventDefault();
+                audioElement.currentTime = Math.min(audioElement.duration, audioElement.currentTime + 5);
+                break;
+            case 'ArrowUp':
+                e.preventDefault();
+                audioElement.volume = Math.min(1, audioElement.volume + 0.1);
+                volumeSlider.value = audioElement.volume;
+                updateVolumeIcon(audioElement.volume);
+                break;
+            case 'ArrowDown':
+                e.preventDefault();
+                audioElement.volume = Math.max(0, audioElement.volume - 0.1);
+                volumeSlider.value = audioElement.volume;
+                updateVolumeIcon(audioElement.volume);
+                break;
+        }
+    });
+}
+
+function updateVolumeIcon(volume) {
+    const volumeBtn = document.getElementById('volume-btn');
+    if (volume === 0) {
+        volumeBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
+    } else if (volume < 0.5) {
+        volumeBtn.innerHTML = '<i class="fas fa-volume-down"></i>';
+    } else {
+        volumeBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
+    }
+}
+
+function toggleMute() {
+    const audioPlayer = document.getElementById('audio-player');
+    const volumeSlider = document.getElementById('volume-slider');
+    
+    if (audioPlayer.volume > 0) {
+        audioPlayer.dataset.lastVolume = audioPlayer.volume;
+        audioPlayer.volume = 0;
+        volumeSlider.value = 0;
+    } else {
+        audioPlayer.volume = audioPlayer.dataset.lastVolume || 1;
+        volumeSlider.value = audioPlayer.volume;
+    }
+    updateVolumeIcon(audioPlayer.volume);
 }
 
 async function playTrack(fileId, title) {
@@ -71,32 +158,35 @@ async function playTrack(fileId, title) {
         const audioPlayer = document.getElementById('audio-player');
         const nowPlaying = document.getElementById('now-playing');
         const playPauseBtn = document.getElementById('play-pause');
+        const progressCurrent = document.getElementById('progress-current');
+        const progressBuffer = document.getElementById('progress-buffer');
         
         // Stop current audio if playing
         if (currentAudio && !currentAudio.paused) {
             currentAudio.pause();
         }
 
+        // Reset progress bars
+        progressCurrent.style.width = '0%';
+        progressBuffer.style.width = '0%';
+
         playerContainer.classList.remove('hidden');
         nowPlaying.textContent = title;
         
-        // Add timestamp to prevent caching
         const timestamp = new Date().getTime();
         const streamUrl = `${API_URL}/stream/${fileId}?t=${timestamp}`;
         
-        // Reset player state
         audioPlayer.src = streamUrl;
         playPauseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
         
-        // Initialize new audio player
         initializeAudioPlayer(audioPlayer);
         currentAudio = audioPlayer;
         
-        // Start playing
         const playPromise = audioPlayer.play();
         if (playPromise !== undefined) {
             playPromise.catch(error => {
                 console.error('Playback error:', error);
+                playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
             });
         }
     } catch (error) {
@@ -104,6 +194,8 @@ async function playTrack(fileId, title) {
         alert('Error playing track. Please try again.');
     }
 }
+
+
 
 // Update the formatTime function to handle larger durations
 function formatTime(seconds) {
