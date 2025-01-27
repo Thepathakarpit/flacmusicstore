@@ -17,21 +17,15 @@ BASE_DOWNLOAD_URL = "https://drive.google.com/uc?export=download&id="
 
 def get_drive_service(file_id):
     try:
-        # Construct the file download URL
+        # Construct the direct file download URL
         file_url = f"{BASE_DOWNLOAD_URL}{file_id}"
 
         # Send a GET request to download the file
-        response = requests.get(file_url, stream=True, allow_redirects=True)
-        response.raise_for_status()  # Ensure the request was successful
+        response = requests.get(file_url, stream=True)
+        response.raise_for_status()  # Raise error for invalid responses
 
-        # Extract the file name from headers or use file ID as fallback
-        file_name = file_id
-        if 'content-disposition' in response.headers:
-            content_disposition = response.headers['content-disposition']
-            if 'filename=' in content_disposition:
-                file_name = content_disposition.split("filename=")[-1].strip('"')
-        else:
-            print("Warning: Could not determine file name from response headers.")
+        # Use file ID as fallback file name
+        file_name = f"{file_id}.file"
 
         # Ensure the download directory exists
         if not os.path.exists(TEMP_DOWNLOAD_DIR):
@@ -39,7 +33,7 @@ def get_drive_service(file_id):
 
         file_path = os.path.join(TEMP_DOWNLOAD_DIR, file_name)
 
-        # Write the content to a file
+        # Write the file content to disk
         with open(file_path, 'wb') as file:
             for chunk in response.iter_content(chunk_size=8192):
                 file.write(chunk)
