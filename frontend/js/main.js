@@ -20,11 +20,12 @@ async function searchTracks(query) {
         
         console.log('Received data:', data);
         
-        if (data.success) {
-            displayResults(data.results);
-            return data.results;
+        // Check if results are present and display them
+        if (Array.isArray(data) && data.length > 0) {
+            displayResults(data);
+            return data;
         } else {
-            console.error('Search failed:', data.error || 'Unknown error');
+            console.error('Search failed: No results found or unknown error');
             return [];
         }
     } catch (error) {
