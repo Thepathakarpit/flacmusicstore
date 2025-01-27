@@ -47,8 +47,6 @@ def get_drive_service():
             flow.redirect_uri = "https://thepathakarpit.github.io/flacmusicstore/"
             
             # Run the local server flow
-            creds = flow.run_local_server(port=0)
-            
             # Save the credentials for future use
             with open('token.json', 'w') as token:
                 token.write(creds.to_json())
