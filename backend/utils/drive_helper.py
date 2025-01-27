@@ -14,46 +14,45 @@ def get_drive_service():
     if os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
     if not creds or not creds.valid:
+        # Get credentials from environment variable
         creds_json = os.environ.get('GOOGLE_DRIVE_CREDENTIALS')
         if not creds_json:
             raise Exception("Google Drive credentials not found in environment variables")
-
+        
         try:
+            # Parse the credentials JSON
             client_secret_data = json.loads(creds_json)
             
-            # Use web configuration matching your GitHub Pages setup
+            # Ensure the proper format Google expects
             client_config = {
                 "web": {
                     "client_id": client_secret_data["web"]["client_id"],
-                    "client_secret": client_secret_data["web"]["client_secret"],
+                    "project_id": "flacstore",  # Add a default project_id
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": client_secret_data["web"]["redirect_uris"]
+                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                    "client_secret": client_secret_data["web"]["client_secret"],
+                    "redirect_uris": client_secret_data["web"]["redirect_uris"],
+                    "javascript_origins": ["https://thepathakarpit.github.io"]
                 }
             }
-
+            
+            # Create flow with the properly formatted config
             flow = Flow.from_client_config(
                 client_config=client_config,
-                scopes=SCOPES,
-                redirect_uri=client_secret_data["web"]["redirect_uris"][0]
-            )
-
-            # Generate authorization URL for manual initialization
-            auth_url, _ = flow.authorization_url(
-                access_type='offline',
-                prompt='consent'
+                scopes=SCOPES
             )
             
-            print(f"MANUAL STEP REQUIRED: Visit this URL to authorize:\n{auth_url}")
-            print("Then paste the authorization code below:")
-            code = input("Enter authorization code: ")
+            # Set the redirect URI to match your GitHub Pages URL
+            flow.redirect_uri = "https://thepathakarpit.github.io/flacmusicstore/"
             
-            flow.fetch_token(code=code)
-            creds = flow.credentials
+            # Run the local server flow
+            creds = flow.run_local_server(port=0)
             
+            # Save the credentials for future use
             with open('token.json', 'w') as token:
                 token.write(creds.to_json())
-
+                
         except json.JSONDecodeError:
             raise Exception("Invalid JSON format in GOOGLE_DRIVE_CREDENTIALS")
         except KeyError as e:
