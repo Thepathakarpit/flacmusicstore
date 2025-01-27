@@ -1,40 +1,87 @@
-from flask import Flask, jsonify, request, send_file, Response, stream_with_context
+from flask import Flask, jsonify, request, send_file, Response
 from flask_cors import CORS
 import pandas as pd
 import os
-from utils.drive_helper import download_file, stream_file
-from utils.csv_helper import search_tracks
+import requests
+import io
 
 app = Flask(__name__)
-# Configure CORS to allow requests from your GitHub Pages domain
-CORS(app, resources={
-    r"/api/*": {
-        "origins": "*"
-    }
-})
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+# Constants
+TEMP_DOWNLOAD_DIR = 'temp_downloads'
+BASE_EXPORT_URL = "https://drive.google.com/uc?export=download&id="
+
+def download_and_cache_file(file_id):
+    """Download and cache a file from Google Drive"""
+    try:
+        file_url = f"{BASE_EXPORT_URL}{file_id}"
+        response = requests.get(file_url, stream=True, allow_redirects=True)
+
+        if response.status_code == 404:
+            raise Exception("File not found. Ensure the file ID is correct and the file is publicly accessible.")
+
+        # Use file ID as fallback file name
+        file_name = f"{file_id}.file"
+
+        # Extract filename from headers if available
+        if 'content-disposition' in response.headers:
+            content_disposition = response.headers['content-disposition']
+            if 'filename=' in content_disposition:
+                file_name = content_disposition.split('filename=')[-1].strip('"')
+
+        # Ensure the download directory exists
+        if not os.path.exists(TEMP_DOWNLOAD_DIR):
+            os.makedirs(TEMP_DOWNLOAD_DIR)
+
+        file_path = os.path.join(TEMP_DOWNLOAD_DIR, file_name)
+
+        # Write the file content to disk
+        with open(file_path, 'wb') as file:
+            for chunk in response.iter_content(chunk_size=8192):
+                file.write(chunk)
+
+        return file_path
+
+    except requests.RequestException as e:
+        print(f"Error downloading file: {str(e)}")
+        raise Exception(f"Error downloading file: {str(e)}")
+
+def search_tracks(query):
+    """Search tracks in the CSV file"""
+    try:
+        csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tracks.csv')
+        df = pd.read_csv(csv_path)
+        
+        # Convert query and searchable columns to lowercase for case-insensitive search
+        query = query.lower()
+        
+        # Search in relevant columns (adjust these based on your CSV structure)
+        mask = df['title'].str.lower().str.contains(query, na=False) | \
+               df['artist'].str.lower().str.contains(query, na=False)
+        
+        results = df[mask].to_dict('records')
+        return results
+    except Exception as e:
+        print(f"Error searching tracks: {str(e)}")
+        raise
 
 @app.route('/api/search', methods=['GET'])
 def search():
     try:
         query = request.args.get('q', '')
-        print(f"Searching for: {query}")  # Debug print
+        print(f"Searching for: {query}")
         
-        # Get absolute path to tracks.csv
         csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tracks.csv')
-        print(f"CSV path: {csv_path}")
-        
         if not os.path.exists(csv_path):
-            print(f"Error: tracks.csv not found at {csv_path}")
             return jsonify({
                 'error': 'Database file not found',
                 'path': csv_path
             }), 404
             
         results = search_tracks(query)
-        print(f"Found {len(results)} results")
         return jsonify(results)
     except Exception as e:
-        print(f"Search error: {str(e)}")
         return jsonify({
             'error': str(e),
             'type': type(e).__name__
@@ -43,7 +90,7 @@ def search():
 @app.route('/api/download/<file_id>', methods=['GET'])
 def download(file_id):
     try:
-        file_path = download_file(file_id)
+        file_path = download_and_cache_file(file_id)
         return send_file(file_path, as_attachment=True)
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -51,12 +98,14 @@ def download(file_id):
 @app.route('/api/stream/<file_id>')
 def stream(file_id):
     try:
-        # Get the file data
-        file_data = stream_file(file_id)
+        file_url = f"{BASE_EXPORT_URL}{file_id}"
+        response = requests.get(file_url, stream=True)
         
-        # Return as a streaming response
+        if response.status_code != 200:
+            raise Exception("Failed to fetch file from Google Drive")
+
         return Response(
-            file_data,
+            response.iter_content(chunk_size=8192),
             mimetype='audio/flac',
             headers={
                 'Accept-Ranges': 'bytes',
@@ -68,7 +117,6 @@ def stream(file_id):
         print(f"Streaming error: {str(e)}")
         return jsonify({'error': str(e)}), 400
 
-# Add a test endpoint to verify the service is running
 @app.route('/api/test', methods=['GET'])
 def test():
     return jsonify({
@@ -77,4 +125,4 @@ def test():
     })
 
 if __name__ == '__main__':
-    app.run(debug=True) 
+    app.run(debug=True)
