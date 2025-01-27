@@ -131,6 +131,7 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+
 // Ensure handleSearch is defined and accessible
 async function handleSearch() {
     try {
