@@ -1,4 +1,10 @@
-const API_URL = 'https://flacmusicstore-production.up.railway.app';
+// Dynamic API URL - automatically detect local vs production
+const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+    ? 'http://localhost:5000' 
+    : 'https://flacmusicstore-production.up.railway.app';
+
+console.log('API URL:', API_URL);
+console.log('Current hostname:', window.location.hostname);
 let audioPlayer;
 let currentAudio = null;
 let seeking = false;
@@ -177,8 +183,21 @@ async function searchTracks(query) {
         
         const searchUrl = `${API_URL}/api/search?q=${encodeURIComponent(query)}`;
         console.log('Searching:', searchUrl);
+        console.log('API URL being used:', API_URL);
         
-        const response = await fetch(searchUrl);
+        // Add CORS mode and additional headers
+        const response = await fetch(searchUrl, {
+            method: 'GET',
+            mode: 'cors',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+        });
+        
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers);
+        
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -196,6 +215,11 @@ async function searchTracks(query) {
         }
     } catch (error) {
         console.error('Error searching tracks:', error);
+        console.error('Error details:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+        });
         return [];
     }
 }

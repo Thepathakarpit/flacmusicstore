@@ -8,7 +8,29 @@ import io
 import mimetypes
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+# Enhanced CORS configuration for better cross-origin support
+CORS(app, 
+     resources={
+         r"/api/*": {
+             "origins": ["*"],  # Allow all origins
+             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Allow all methods
+             "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+             "supports_credentials": True
+         },
+         r"/stream/*": {
+             "origins": ["*"],
+             "methods": ["GET", "HEAD", "OPTIONS"],
+             "allow_headers": ["Range", "Content-Type"],
+             "expose_headers": ["Content-Range", "Accept-Ranges", "Content-Length"]
+         }
+     },
+     origins="*",  # Global fallback
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Range"],
+     expose_headers=["Content-Range", "Accept-Ranges", "Content-Length"],
+     supports_credentials=True
+)
 
 # Constants
 TEMP_DOWNLOAD_DIR = 'temp_downloads'
@@ -98,8 +120,16 @@ def search_tracks(query):
         print(f"Error searching tracks: {str(e)}")
         raise
 
-@app.route('/api/search', methods=['GET'])
+@app.route('/api/search', methods=['GET', 'OPTIONS'])
 def search():
+    # Handle preflight OPTIONS request
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+        return response
+    
     try:
         query = request.args.get('q', '')
         print(f"Searching for: {query}")
@@ -112,12 +142,16 @@ def search():
             }), 404
             
         results = search_tracks(query)
-        return jsonify(results)
+        response = jsonify(results)
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response
     except Exception as e:
-        return jsonify({
+        response = jsonify({
             'error': str(e),
             'type': type(e).__name__
         }), 500
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response
 
 @app.route('/api/download/<file_id>', methods=['GET'])
 def download(file_id):
@@ -227,12 +261,24 @@ def stream(file_id):
         print(f"Streaming error (General): {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
-@app.route('/api/test', methods=['GET'])
+@app.route('/api/test', methods=['GET', 'OPTIONS'])
 def test():
-    return jsonify({
+    # Handle preflight OPTIONS request
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+        return response
+    
+    response = jsonify({
         'status': 'ok',
-        'message': 'API is running'
+        'message': 'API is running',
+        'cors': 'enabled',
+        'timestamp': pd.Timestamp.now().isoformat()
     })
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    return response
 
 if __name__ == '__main__':
     app.run(debug=True)
